@@ -1,0 +1,37 @@
+[package]
+name = "device-manager"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "device_manager_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+log = "0.4"
+env_logger = "0.11"
+
+[dependencies.windows]
+version = "0.58"
+features = [
+  "Devices_Enumeration",
+  "Foundation",
+  "Foundation_Collections",
+  "Win32_Devices_DeviceAndDriverInstallation",
+  "Win32_Devices_Properties",
+  "Win32_Foundation",
+  "Win32_System_Registry",
+  "Win32_UI_Shell",
+]
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

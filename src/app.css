@@ -1,0 +1,46 @@
+@import 'tailwindcss';
+@import './styles/animations.css';
+
+/*
+ * Base styles — minimal overrides on top of Tailwind.
+ * We respect the OS dark mode preference via Tailwind's `dark:` variant.
+ */
+
+@layer base {
+  html {
+    font-family:
+      'Segoe UI Variable',
+      'Segoe UI',
+      system-ui,
+      -apple-system,
+      sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+  }
+
+  /* Thin scrollbars that match the app aesthetic */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.7 0 0 / 0.3);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.6 0 0 / 0.5);
+  }
+}

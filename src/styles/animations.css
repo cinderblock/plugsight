@@ -1,0 +1,170 @@
+/*
+ * Device Manager Animations
+ *
+ * These animations are what make this app fundamentally different from
+ * the official Windows Device Manager. Instead of the whole list refreshing
+ * and silently replacing itself, individual devices animate in and out so
+ * the user can *see* what changed.
+ *
+ * The solid-transition-group <TransitionGroup> component applies these
+ * CSS classes during element enter/exit/move.
+ */
+
+/* ── Device entry animations ────────────────────────────────────────── */
+
+/* A device appears (newly plugged in or discovered). */
+.device-enter {
+  opacity: 0;
+  max-height: 0;
+  transform: translateX(-12px);
+  overflow: hidden;
+}
+
+.device-enter-active {
+  opacity: 1;
+  max-height: 60px;
+  transform: translateX(0);
+  transition:
+    opacity 300ms ease-out,
+    max-height 300ms ease-out,
+    transform 300ms ease-out;
+}
+
+/* A device is removed from the DOM (ghost expired). */
+.device-exit {
+  opacity: 1;
+  max-height: 60px;
+}
+
+.device-exit-active {
+  opacity: 0;
+  max-height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  transition:
+    opacity 250ms ease-in,
+    max-height 250ms ease-in 50ms,
+    margin 250ms ease-in 50ms,
+    padding 250ms ease-in 50ms;
+}
+
+/* Remaining devices slide smoothly when siblings appear/disappear (FLIP). */
+.device-move {
+  transition: transform 300ms ease-out;
+}
+
+/* ── Category animations ────────────────────────────────────────────── */
+
+.category-enter {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(-8px);
+  overflow: hidden;
+}
+
+.category-enter-active {
+  opacity: 1;
+  max-height: 500px;
+  transform: translateY(0);
+  transition:
+    opacity 350ms ease-out,
+    max-height 350ms ease-out,
+    transform 350ms ease-out;
+}
+
+.category-exit {
+  opacity: 1;
+}
+
+.category-exit-active {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition:
+    opacity 250ms ease-in,
+    max-height 250ms ease-in;
+}
+
+/* ── Highlight flash for recently changed devices ───────────────────── */
+
+@keyframes device-highlight {
+  0% {
+    background-color: oklch(0.85 0.15 145); /* green tint */
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes device-highlight-dark {
+  0% {
+    background-color: oklch(0.3 0.1 145); /* dark green tint */
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.device-entry--highlight {
+  animation: device-highlight 2s ease-out;
+}
+
+@media (prefers-color-scheme: dark) {
+  .device-entry--highlight {
+    animation: device-highlight-dark 2s ease-out;
+  }
+}
+
+/* ── Detail panel slide-in ──────────────────────────────────────────── */
+
+@keyframes detail-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.detail-panel-enter {
+  animation: detail-slide-in 200ms ease-out;
+}
+
+/* ── Ghost transition ───────────────────────────────────────────────── */
+/* When a live device transitions to ghost state, this is handled by
+   SolidJS reactivity changing the classes on DeviceEntry. The actual
+   opacity/style change is handled by Tailwind's transition utilities
+   on the component (transition-all duration-200). */
+
+/* ── Status badge pulse ─────────────────────────────────────────────── */
+
+@keyframes badge-attention {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.status-badge--attention {
+  animation: badge-attention 300ms ease-in-out;
+}
+
+/* ── Loading spinner ────────────────────────────────────────────────── */
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}

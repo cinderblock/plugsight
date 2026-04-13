@@ -1,0 +1,50 @@
+//! Tauri commands exposed to the frontend via `invoke()`.
+
+use crate::device::class_meta;
+use crate::device::enumerator;
+use crate::device::types::{ClassMeta, DeviceInfo};
+
+/// Return all currently present devices.
+///
+/// This is used as a fallback / manual refresh. Normally, the frontend receives
+/// devices incrementally via the DeviceWatcher event stream.
+#[tauri::command]
+pub fn get_all_devices() -> Result<Vec<DeviceInfo>, String> {
+    Ok(enumerator::enumerate_all_devices())
+}
+
+/// Get detailed info for a single device by instance ID.
+#[tauri::command]
+pub fn get_device_detail(instance_id: String) -> Result<Option<DeviceInfo>, String> {
+    Ok(enumerator::get_device_by_instance_id(&instance_id))
+}
+
+/// Return metadata for all known device setup classes.
+#[tauri::command]
+pub fn get_class_metadata() -> Result<Vec<ClassMeta>, String> {
+    Ok(class_meta::all_known_classes())
+}
+
+/// Trigger a hardware scan (equivalent to "Scan for hardware changes" in Device Manager).
+#[tauri::command]
+pub fn scan_for_hardware_changes() -> Result<(), String> {
+    // This uses CM_Reenumerate_DevNode on the root device node.
+    // The DeviceWatcher will pick up any changes automatically.
+    unsafe {
+        use windows::Win32::Devices::DeviceAndDriverInstallation::*;
+
+        let mut dev_inst: u32 = 0;
+        let result = CM_Locate_DevNodeW(&mut dev_inst, None, CM_LOCATE_DEVNODE_NORMAL);
+        if result != CONFIGRET(0) {
+            return Err(format!("CM_Locate_DevNodeW failed: {result:?}"));
+        }
+
+        let result = CM_Reenumerate_DevNode(dev_inst, CM_REENUMERATE_NORMAL);
+        if result != CONFIGRET(0) {
+            return Err(format!("CM_Reenumerate_DevNode failed: {result:?}"));
+        }
+    }
+
+    log::info!("Hardware scan triggered");
+    Ok(())
+}

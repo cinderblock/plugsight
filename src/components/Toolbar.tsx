@@ -1,5 +1,7 @@
 /**
- * Toolbar — top bar with search, actions, and status counters.
+ * Toolbar — top bar with search and actions.
+ *
+ * Device counts and version info are shown in the StatusBar (footer) instead.
  */
 
 import type { Component } from 'solid-js';
@@ -11,7 +13,6 @@ import {
   expandAllCategories,
   collapseAllCategories,
   clearAllGhosts,
-  state,
 } from '~/lib/device-store';
 import { scanForHardwareChanges } from '~/lib/tauri';
 
@@ -104,23 +105,6 @@ const Toolbar: Component = () => {
               </svg>
             }
           />
-        </Show>
-      </div>
-
-      {/* Status counters */}
-      <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0">
-        <Show when={state.enumerationComplete}>
-          <span>{counts().total} devices</span>
-          <Show when={counts().problems > 0}>
-            <span class="text-red-500 dark:text-red-400 font-medium">
-              {counts().problems} problem{counts().problems !== 1 ? 's' : ''}
-            </span>
-          </Show>
-          <Show when={counts().ghosts > 0}>
-            <span class="italic text-gray-400 dark:text-gray-500">
-              {counts().ghosts} removed
-            </span>
-          </Show>
         </Show>
       </div>
     </div>

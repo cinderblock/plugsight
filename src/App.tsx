@@ -7,13 +7,18 @@
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { initDeviceStore, selectedDevice } from '~/lib/device-store';
+import { initUpdater } from '~/lib/updater';
 import Toolbar from '~/components/Toolbar';
 import DeviceTree from '~/components/DeviceTree';
 import DeviceDetail from '~/components/DeviceDetail';
+import StatusBar from '~/components/StatusBar';
 
 const App: Component = () => {
-  // Wire up the event listener and ghost sweeper.
+  // Wire up the device event listener and ghost sweeper.
   initDeviceStore();
+
+  // Start background update checking against GitHub releases.
+  initUpdater();
 
   return (
     <div class="h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 select-none">
@@ -33,10 +38,8 @@ const App: Component = () => {
         </Show>
       </div>
 
-      {/* Bottom status bar */}
-      <div class="h-6 px-4 flex items-center border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 shrink-0">
-        <span class="text-xs text-gray-400 dark:text-gray-500">Device Manager</span>
-      </div>
+      {/* Bottom status bar: version, counts, update badge */}
+      <StatusBar />
     </div>
   );
 };

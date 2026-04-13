@@ -32,30 +32,137 @@ const [releaseUrl, setReleaseUrl] = createSignal<string | null>(null);
 const [updateAvailable, setUpdateAvailable] = createSignal(false);
 const [checking, setChecking] = createSignal(false);
 
-// ── Version comparison ────────────────────────────────────────────────────
+// ── Version parsing and comparison ────────────────────────────────────────
 
 /**
- * Simple semver comparison. Returns true if `latest` is newer than `current`.
- * Handles versions with or without a leading "v".
+ * Parsed representation of a version string.
+ *
+ * Handles real-world version formats:
+ *   "0.2.0"                → { major:0, minor:2, patch:0, pre:null,    meta:null }
+ *   "v1.3.0-rc.1"          → { major:1, minor:3, patch:0, pre:"rc.1", meta:null }
+ *   "0.1.0-3-gabcdef"      → { major:0, minor:1, patch:0, pre:"3-gabcdef", meta:null }
+ *   "0.1.0+dirty"          → { major:0, minor:1, patch:0, pre:null,    meta:"dirty" }
+ *   "0.1.0-beta.2+sha.abc" → { major:0, minor:1, patch:0, pre:"beta.2", meta:"sha.abc" }
  */
-function isNewer(current: string, latest: string): boolean {
-  const parse = (v: string) =>
-    v
-      .replace(/^v/, '')
-      .split('.')
-      .map(n => parseInt(n, 10) || 0);
+interface ParsedVersion {
+  major: number;
+  minor: number;
+  patch: number;
+  /** Pre-release segment (after "-", before "+"). Null if this is a clean release. */
+  pre: string | null;
+  /** Build metadata (after "+"). Ignored in comparisons per semver spec. */
+  meta: string | null;
+}
 
-  const cur = parse(current);
-  const lat = parse(latest);
+/**
+ * Parse a version string into its components.
+ * Tolerates a leading "v", missing segments, and non-standard suffixes.
+ */
+function parseVersion(raw: string): ParsedVersion {
+  // Strip leading "v" or "V".
+  let s = raw.replace(/^[vV]/, '');
 
-  for (let i = 0; i < Math.max(cur.length, lat.length); i++) {
-    const c = cur[i] ?? 0;
-    const l = lat[i] ?? 0;
-    if (l > c) return true;
-    if (l < c) return false;
+  // Split off build metadata (everything after "+").
+  let meta: string | null = null;
+  const plusIdx = s.indexOf('+');
+  if (plusIdx !== -1) {
+    meta = s.slice(plusIdx + 1) || null;
+    s = s.slice(0, plusIdx);
   }
 
-  return false;
+  // Split off pre-release (everything after the first "-" that follows the numeric part).
+  // We need to be careful: "1.2.3-rc.1" has pre="rc.1", but we want to split only
+  // after the MAJOR.MINOR.PATCH portion.
+  let pre: string | null = null;
+  const match = s.match(/^(\d+(?:\.\d+)*)(-.+)?$/);
+  let numericPart: string;
+  if (match) {
+    numericPart = match[1];
+    if (match[2]) {
+      pre = match[2].slice(1); // remove the leading "-"
+    }
+  } else {
+    // Couldn't parse — treat the whole thing as 0.0.0 with a pre-release tag.
+    numericPart = '0.0.0';
+    pre = s || null;
+  }
+
+  const parts = numericPart.split('.').map(n => parseInt(n, 10) || 0);
+  return {
+    major: parts[0] ?? 0,
+    minor: parts[1] ?? 0,
+    patch: parts[2] ?? 0,
+    pre,
+    meta,
+  };
+}
+
+/**
+ * Compare pre-release strings per semver 2.0.0 rules:
+ *   - No pre-release (null) > any pre-release (a clean release is newer).
+ *   - Otherwise compare dot-separated identifiers left-to-right:
+ *     numeric identifiers compared as integers, string identifiers lexically.
+ *   - Fewer identifiers < more identifiers when all preceding are equal.
+ *
+ * Returns: negative if a < b, zero if a == b, positive if a > b.
+ */
+function comparePre(a: string | null, b: string | null): number {
+  // Both clean releases → equal.
+  if (a === null && b === null) return 0;
+  // Clean release beats any pre-release.
+  if (a === null) return 1;
+  if (b === null) return -1;
+
+  const aParts = a.split('.');
+  const bParts = b.split('.');
+
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    // Fewer fields = lower precedence.
+    if (i >= aParts.length) return -1;
+    if (i >= bParts.length) return 1;
+
+    const aNum = /^\d+$/.test(aParts[i]) ? parseInt(aParts[i], 10) : null;
+    const bNum = /^\d+$/.test(bParts[i]) ? parseInt(bParts[i], 10) : null;
+
+    // Both numeric → compare as integers.
+    if (aNum !== null && bNum !== null) {
+      if (aNum !== bNum) return aNum - bNum;
+      continue;
+    }
+    // Numeric < string.
+    if (aNum !== null) return -1;
+    if (bNum !== null) return 1;
+    // Both strings → lexical.
+    const cmp = aParts[i].localeCompare(bParts[i]);
+    if (cmp !== 0) return cmp;
+  }
+
+  return 0;
+}
+
+/**
+ * Returns true if `latest` is a newer release than `current`.
+ *
+ * Follows semver 2.0.0 precedence rules:
+ *   - Compare MAJOR.MINOR.PATCH numerically.
+ *   - If those are equal, a version *without* a pre-release tag is newer
+ *     than one *with* a pre-release tag (e.g. "1.0.0" > "1.0.0-rc.1").
+ *   - Build metadata ("+dirty", "+sha.abc") is ignored entirely.
+ *
+ * This correctly handles dirty builds, git-describe tags, rc/beta/alpha
+ * pre-releases, and any other suffixes.
+ */
+function isNewer(current: string, latest: string): boolean {
+  const cur = parseVersion(current);
+  const lat = parseVersion(latest);
+
+  // Compare major.minor.patch.
+  if (lat.major !== cur.major) return lat.major > cur.major;
+  if (lat.minor !== cur.minor) return lat.minor > cur.minor;
+  if (lat.patch !== cur.patch) return lat.patch > cur.patch;
+
+  // Same numeric version — compare pre-release.
+  return comparePre(lat.pre, cur.pre) > 0;
 }
 
 // ── Update check ──────────────────────────────────────────────────────────

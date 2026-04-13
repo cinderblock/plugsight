@@ -60,17 +60,17 @@ pub fn enumerate_all_devices() -> Vec<DeviceInfo> {
 }
 
 /// Look up a single device by its PnP instance ID and return its properties.
+///
+/// Uses `SetupDiCreateDeviceInfoList` + `SetupDiOpenDeviceInfoW` which is the
+/// correct way to open a specific device by instance ID (as opposed to passing
+/// the ID as the "Enumerator" parameter to `SetupDiGetClassDevsW`, which expects
+/// enumerator names like "USB" or "PCI").
 pub fn get_device_by_instance_id(instance_id: &str) -> Option<DeviceInfo> {
     let wide_id: Vec<u16> = instance_id.encode_utf16().chain(std::iter::once(0)).collect();
 
     unsafe {
-        let dev_info_set = SetupDiGetClassDevsW(
-            None,
-            PCWSTR(wide_id.as_ptr()),
-            None,
-            DIGCF_ALLCLASSES | DIGCF_PRESENT,
-        );
-
+        // Create an empty device info set (not filtered by class).
+        let dev_info_set = SetupDiCreateDeviceInfoList(None, None);
         let dev_info_set = match dev_info_set {
             Ok(h) => h,
             Err(_) => return None,
@@ -81,7 +81,15 @@ pub fn get_device_by_instance_id(instance_id: &str) -> Option<DeviceInfo> {
             ..Default::default()
         };
 
-        let result = SetupDiEnumDeviceInfo(dev_info_set, 0, &mut dev_info_data);
+        // Open the specific device by instance ID into the info set.
+        let result = SetupDiOpenDeviceInfoW(
+            dev_info_set,
+            PCWSTR(wide_id.as_ptr()),
+            None,
+            0,
+            Some(&mut dev_info_data),
+        );
+
         let device = if result.is_ok() {
             build_device_info(dev_info_set, &dev_info_data)
         } else {

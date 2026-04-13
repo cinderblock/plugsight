@@ -13,7 +13,7 @@ import { createSignal, createMemo, batch, onCleanup, onMount } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice } from './types';
 import { hasDeviceProblem } from './types';
-import { onDeviceEvent } from './tauri';
+import { onDeviceEvent, getAllDevices } from './tauri';
 import { CLASS_ICON_MAP } from './icons';
 
 // ── Configuration ─────────────────────────────────────────────────────────
@@ -313,7 +313,23 @@ function initDeviceStore() {
   let unlisten: (() => void) | null = null;
 
   onMount(async () => {
+    // 1. Subscribe to live change events from the DeviceWatcher.
     unlisten = await onDeviceEvent(handleDeviceEvent);
+
+    // 2. Load the initial device list via SetupAPI (reliable, full properties).
+    //    The DeviceWatcher will handle incremental changes from this point on.
+    try {
+      const devices = await getAllDevices();
+      batch(() => {
+        for (const device of devices) {
+          setState('devices', device.instanceId, device);
+        }
+        setState('enumerationComplete', true);
+      });
+    } catch (e) {
+      console.error('Failed to enumerate devices:', e);
+      setState('enumerationComplete', true);
+    }
   });
 
   // Periodic ghost sweeper.

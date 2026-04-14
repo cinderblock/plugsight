@@ -41,8 +41,8 @@ Devices are organized by setup class (Display adapters, Network adapters, USB co
 ### Persistent UI State
 Search query, filter state, category expansion, and hidden devices/categories are all saved to `localStorage` and restored on next launch.
 
-### Automatic Update Checking
-The app polls GitHub Releases every 30 minutes and shows an animated badge in the status bar when a new version is available.
+### In-App Auto-Updates
+Installed builds (NSIS/MSI) use Tauri's native updater to download, verify, and install updates seamlessly — with a progress bar in the status bar. Portable builds fall back to polling GitHub Releases and showing a badge that opens the download page.
 
 ## Tech Stack
 
@@ -78,14 +78,40 @@ cargo tauri dev
 cargo tauri build
 ```
 
-This produces both an **MSI installer** and a **portable EXE** in `src-tauri/target/release/bundle/`.
+This produces an **NSIS installer**, **MSI installer**, and a **portable EXE** in `src-tauri/target/release/bundle/`.
 
 ## Release & Distribution
 
-GitHub Actions handles CI and releases:
+### CI
 
-- **CI** (`ci.yml`) — runs on every push/PR: Rust build, `cargo clippy`, `cargo fmt`, and frontend build checks.
-- **Release** (`release.yml`) — triggered by version tags or manual dispatch: builds the MSI installer and a portable `Device Manager++.exe`, then uploads both to a GitHub Release.
+`ci.yml` runs on every push/PR: Rust build check, `cargo clippy`, `cargo fmt`, and frontend build.
+
+### Releasing a New Version
+
+```bash
+# Bump version in all config files (package.json, Cargo.toml, tauri.conf.json)
+bun run version:bump minor          # or: patch, major, prerelease rc, or explicit like 1.0.0
+
+# Commit, tag, and push
+git add -A && git commit -m "Bump version to v0.2.0"
+git tag v0.2.0
+git push && git push origin v0.2.0
+```
+
+The **Release** workflow (`release.yml`) is triggered by the tag push and:
+1. Builds NSIS installer (supports per-user install, no admin required), MSI installer (for enterprise/GPO), and a portable EXE
+2. Signs bundles with the Tauri updater key for in-app update verification
+3. Generates a `latest.json` manifest that the app's updater checks
+4. Creates a GitHub Release with all artifacts and auto-generated release notes
+
+### Required GitHub Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `TAURI_SIGNING_PRIVATE_KEY` | Base64-encoded private key from `cargo tauri signer generate`. Used to sign update bundles. |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the signing key (optional if key has no password). |
+
+The corresponding public key is committed in `src-tauri/keys/updater.key.pub` and referenced in `tauri.conf.json`.
 
 ## Architecture
 

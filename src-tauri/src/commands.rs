@@ -1,5 +1,8 @@
 //! Tauri commands exposed to the frontend via `invoke()`.
 
+use std::collections::HashMap;
+
+use crate::device::class_icons;
 use crate::device::class_meta;
 use crate::device::enumerator;
 use crate::device::types::{ClassMeta, DeviceInfo};
@@ -23,6 +26,15 @@ pub fn get_device_detail(instance_id: String) -> Result<Option<DeviceInfo>, Stri
 #[tauri::command]
 pub fn get_class_metadata() -> Result<Vec<ClassMeta>, String> {
     Ok(class_meta::all_known_classes())
+}
+
+/// Return real Windows icons for the given device class GUIDs.
+///
+/// Returns a map of GUID → `data:image/png;base64,...` data URL strings.
+/// Icons are cached in-process after first extraction.
+#[tauri::command]
+pub fn get_class_icons(class_guids: Vec<String>) -> Result<HashMap<String, String>, String> {
+    Ok(class_icons::get_class_icons_batch(&class_guids))
 }
 
 /// Trigger a hardware scan (equivalent to "Scan for hardware changes" in the Windows Device Manager).

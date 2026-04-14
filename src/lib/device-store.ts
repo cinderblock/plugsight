@@ -15,6 +15,7 @@ import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice
 import { hasDeviceProblem } from './types';
 import { onDeviceEvent, getAllDevices } from './tauri';
 import { CLASS_ICON_MAP } from './icons';
+import { loadClassIcons } from './icon-cache';
 
 // ── Configuration ─────────────────────────────────────────────────────────
 
@@ -388,6 +389,10 @@ function initDeviceStore() {
         }
         setState('enumerationComplete', true);
       });
+
+      // Load real Windows icons for all discovered device classes.
+      const uniqueGuids = [...new Set(devices.map(d => d.classGuid))];
+      loadClassIcons(uniqueGuids);
     } catch (e) {
       console.error('Failed to enumerate devices:', e);
       setState('enumerationComplete', true);

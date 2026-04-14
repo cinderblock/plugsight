@@ -1,33 +1,45 @@
 /**
- * SVG icons for device categories.
+ * Device icons — renders real Windows system icons when available,
+ * falling back to hand-drawn SVGs.
  *
- * Each icon is a clean 24x24 SVG designed to be crisp at small sizes
- * but also look good scaled up. We use inline SVGs so they inherit
- * the current text color (currentColor).
+ * Real icons are extracted from Windows DLLs via SetupAPI on the Rust backend
+ * and served as base64 PNG data URLs. The SVG fallbacks are clean 24x24 icons
+ * designed to be crisp at small sizes.
  */
 
 import type { Component } from 'solid-js';
+import { Show } from 'solid-js';
+import { getClassIconUrl } from '~/lib/icon-cache';
 
 interface DeviceIconProps {
   iconId: string;
+  classGuid?: string;
   class?: string;
 }
 
 const DeviceIcon: Component<DeviceIconProps> = props => {
   const iconClass = () => props.class ?? 'w-5 h-5';
+  const realIconUrl = () => props.classGuid ? getClassIconUrl(props.classGuid) : undefined;
 
   return (
-    <svg
-      class={iconClass()}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+    <Show
+      when={realIconUrl()}
+      fallback={
+        <svg
+          class={iconClass()}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          {iconPaths(props.iconId)}
+        </svg>
+      }
     >
-      {iconPaths(props.iconId)}
-    </svg>
+      {url => <img src={url()} class={iconClass()} alt="" draggable={false} />}
+    </Show>
   );
 };
 

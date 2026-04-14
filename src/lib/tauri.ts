@@ -26,6 +26,11 @@ export async function getClassMetadata(): Promise<ClassMeta[]> {
   return invoke<ClassMeta[]>('get_class_metadata');
 }
 
+/** Fetch real Windows device class icons as base64 data URLs. */
+export async function getClassIcons(classGuids: string[]): Promise<Record<string, string>> {
+  return invoke<Record<string, string>>('get_class_icons', { classGuids });
+}
+
 /** Trigger a hardware re-scan. */
 export async function scanForHardwareChanges(): Promise<void> {
   return invoke<void>('scan_for_hardware_changes');

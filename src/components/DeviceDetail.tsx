@@ -58,7 +58,7 @@ const DeviceDetail: Component = () => {
                   ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
                   : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
               }`}>
-                <DeviceIcon iconId={iconId()} class="w-8 h-8" />
+                <DeviceIcon iconId={iconId()} classGuid={device().classGuid} class="w-8 h-8" />
               </div>
               <div class="min-w-0">
                 <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100 leading-snug">

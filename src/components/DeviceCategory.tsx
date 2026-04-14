@@ -47,7 +47,7 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
 
         {/* Category icon */}
         <div class="text-gray-500 dark:text-gray-400 shrink-0">
-          <DeviceIcon iconId={cat().iconId} class="w-5 h-5" />
+          <DeviceIcon iconId={cat().iconId} classGuid={cat().classGuid} class="w-5 h-5" />
         </div>
 
         {/* Category name */}

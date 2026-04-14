@@ -68,7 +68,7 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
     >
       {/* Device icon */}
       <div class={`shrink-0 ${isGhost() ? 'text-gray-400 dark:text-gray-600' : hasProblem() ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}`}>
-        <DeviceIcon iconId={iconId()} class="w-5 h-5" />
+        <DeviceIcon iconId={iconId()} classGuid={device().classGuid} class="w-5 h-5" />
       </div>
 
       {/* Device name and metadata */}

@@ -18,3 +18,6 @@ Thumbs.db
 # Environment
 .env
 .env.*
+
+# Signing keys (public key is committed; private key must stay secret)
+src-tauri/keys/updater.key

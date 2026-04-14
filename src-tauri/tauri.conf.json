@@ -43,5 +43,13 @@
         "installMode": "both"
       }
     }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/cinderblock/device-manager/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDYwMkRDMEU5M0FCRkZCMTQKUldRVSs3ODY2Y0F0WUlZcHFVTUg2MW10R3QvZmhIeE40Q2x2QnkvWXBaSlRSdFdrWkIrcUJpQVMK"
+    }
   }
 }

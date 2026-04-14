@@ -1,27 +1,35 @@
 /**
- * Update checker — polls GitHub Releases for newer versions.
+ * Update system — uses Tauri's native updater for in-app updates, with a
+ * GitHub Releases API fallback for portable/uninstalled builds.
  *
- * Compares the current app version (from Tauri) against the latest GitHub release tag.
- * Exposes reactive signals that the StatusBar component uses to show an update badge.
+ * Installed builds (NSIS/MSI):
+ *   Uses @tauri-apps/plugin-updater to download and apply updates seamlessly.
+ *   The update bundle is signature-verified against the pubkey in tauri.conf.json.
+ *
+ * Portable builds:
+ *   Falls back to polling the GitHub Releases API. Shows a notification badge
+ *   that opens the release page in the browser for manual download.
+ *
+ * ETag caching is used for GitHub API requests to avoid rate-limit consumption
+ * when the release hasn't changed (304 Not Modified doesn't count against quota).
  */
 
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { getVersion } from '@tauri-apps/api/app';
+import { check, type Update } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 import { open } from '@tauri-apps/plugin-shell';
 
 // ── Configuration ─────────────────────────────────────────────────────────
 
-/**
- * GitHub owner/repo for release checking.
- * Update this when the repo is created.
- */
+/** GitHub owner/repo for release checking (fallback path). */
 const GITHUB_OWNER = 'cinderblock';
 const GITHUB_REPO = 'device-manager';
 
 /** How often to check for updates (ms). Default: 30 minutes. */
 const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
-/** GitHub Releases API endpoint. */
+/** GitHub Releases API endpoint (fallback). */
 const RELEASES_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 
 // ── Signals ───────────────────────────────────────────────────────────────
@@ -32,17 +40,36 @@ const [releaseUrl, setReleaseUrl] = createSignal<string | null>(null);
 const [updateAvailable, setUpdateAvailable] = createSignal(false);
 const [checking, setChecking] = createSignal(false);
 
+/** Whether an in-app update is possible (vs. needing to open the browser). */
+const [canAutoUpdate, setCanAutoUpdate] = createSignal(false);
+
+/** Progress state for download+install. */
+const [updateProgress, setUpdateProgress] = createSignal<{
+  phase: 'downloading' | 'installing' | 'done';
+  /** Download progress 0–100, or null if unknown. */
+  percent: number | null;
+} | null>(null);
+
+// ── ETag cache for GitHub API ─────────────────────────────────────────────
+
+let cachedEtag: string | null = null;
+let cachedRelease: { tag_name: string; html_url: string } | null = null;
+
+// ── Pending update handle ─────────────────────────────────────────────────
+
+let pendingUpdate: Update | null = null;
+
 // ── Version parsing and comparison ────────────────────────────────────────
 
 /**
  * Parsed representation of a version string.
  *
  * Handles real-world version formats:
- *   "0.2.0"                → { major:0, minor:2, patch:0, pre:null,    meta:null }
- *   "v1.3.0-rc.1"          → { major:1, minor:3, patch:0, pre:"rc.1", meta:null }
- *   "0.1.0-3-gabcdef"      → { major:0, minor:1, patch:0, pre:"3-gabcdef", meta:null }
- *   "0.1.0+dirty"          → { major:0, minor:1, patch:0, pre:null,    meta:"dirty" }
- *   "0.1.0-beta.2+sha.abc" → { major:0, minor:1, patch:0, pre:"beta.2", meta:"sha.abc" }
+ *   "0.2.0"                -> { major:0, minor:2, patch:0, pre:null,    meta:null }
+ *   "v1.3.0-rc.1"          -> { major:1, minor:3, patch:0, pre:"rc.1", meta:null }
+ *   "0.1.0-3-gabcdef"      -> { major:0, minor:1, patch:0, pre:"3-gabcdef", meta:null }
+ *   "0.1.0+dirty"          -> { major:0, minor:1, patch:0, pre:null,    meta:"dirty" }
+ *   "0.1.0-beta.2+sha.abc" -> { major:0, minor:1, patch:0, pre:"beta.2", meta:"sha.abc" }
  */
 interface ParsedVersion {
   major: number;
@@ -71,8 +98,6 @@ function parseVersion(raw: string): ParsedVersion {
   }
 
   // Split off pre-release (everything after the first "-" that follows the numeric part).
-  // We need to be careful: "1.2.3-rc.1" has pre="rc.1", but we want to split only
-  // after the MAJOR.MINOR.PATCH portion.
   let pre: string | null = null;
   const match = s.match(/^(\d+(?:\.\d+)*)(-.+)?$/);
   let numericPart: string;
@@ -82,7 +107,6 @@ function parseVersion(raw: string): ParsedVersion {
       pre = match[2].slice(1); // remove the leading "-"
     }
   } else {
-    // Couldn't parse — treat the whole thing as 0.0.0 with a pre-release tag.
     numericPart = '0.0.0';
     pre = s || null;
   }
@@ -107,9 +131,7 @@ function parseVersion(raw: string): ParsedVersion {
  * Returns: negative if a < b, zero if a == b, positive if a > b.
  */
 function comparePre(a: string | null, b: string | null): number {
-  // Both clean releases → equal.
   if (a === null && b === null) return 0;
-  // Clean release beats any pre-release.
   if (a === null) return 1;
   if (b === null) return -1;
 
@@ -117,22 +139,18 @@ function comparePre(a: string | null, b: string | null): number {
   const bParts = b.split('.');
 
   for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-    // Fewer fields = lower precedence.
     if (i >= aParts.length) return -1;
     if (i >= bParts.length) return 1;
 
     const aNum = /^\d+$/.test(aParts[i]) ? parseInt(aParts[i], 10) : null;
     const bNum = /^\d+$/.test(bParts[i]) ? parseInt(bParts[i], 10) : null;
 
-    // Both numeric → compare as integers.
     if (aNum !== null && bNum !== null) {
       if (aNum !== bNum) return aNum - bNum;
       continue;
     }
-    // Numeric < string.
     if (aNum !== null) return -1;
     if (bNum !== null) return 1;
-    // Both strings → lexical.
     const cmp = aParts[i].localeCompare(bParts[i]);
     if (cmp !== 0) return cmp;
   }
@@ -142,43 +160,83 @@ function comparePre(a: string | null, b: string | null): number {
 
 /**
  * Returns true if `latest` is a newer release than `current`.
- *
- * Follows semver 2.0.0 precedence rules:
- *   - Compare MAJOR.MINOR.PATCH numerically.
- *   - If those are equal, a version *without* a pre-release tag is newer
- *     than one *with* a pre-release tag (e.g. "1.0.0" > "1.0.0-rc.1").
- *   - Build metadata ("+dirty", "+sha.abc") is ignored entirely.
- *
- * This correctly handles dirty builds, git-describe tags, rc/beta/alpha
- * pre-releases, and any other suffixes.
+ * Follows semver 2.0.0 precedence rules.
  */
 function isNewer(current: string, latest: string): boolean {
   const cur = parseVersion(current);
   const lat = parseVersion(latest);
 
-  // Compare major.minor.patch.
   if (lat.major !== cur.major) return lat.major > cur.major;
   if (lat.minor !== cur.minor) return lat.minor > cur.minor;
   if (lat.patch !== cur.patch) return lat.patch > cur.patch;
 
-  // Same numeric version — compare pre-release.
   return comparePre(lat.pre, cur.pre) > 0;
 }
 
-// ── Update check ──────────────────────────────────────────────────────────
+// ── Tauri native updater (primary path) ───────────────────────────────────
 
-async function checkForUpdates() {
-  if (checking()) return;
-  setChecking(true);
-
+/**
+ * Try the Tauri plugin updater first. This works for installed builds
+ * (NSIS/MSI) where the updater can download and apply a signed update.
+ *
+ * Returns true if the native updater found an update (or handled the check).
+ * Returns false if the plugin isn't available (portable build, dev mode, etc.).
+ */
+async function tryNativeUpdater(): Promise<boolean> {
   try {
-    const response = await fetch(RELEASES_API, {
-      headers: { Accept: 'application/vnd.github.v3+json' },
-    });
+    const update = await check();
+    if (update) {
+      pendingUpdate = update;
+      setLatestVersion(update.version);
+      setUpdateAvailable(true);
+      setCanAutoUpdate(true);
+      // Try to get the release URL for display purposes.
+      setReleaseUrl(
+        `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tag/v${update.version}`,
+      );
+      return true;
+    }
+    // Plugin worked but no update available.
+    setUpdateAvailable(false);
+    return true;
+  } catch {
+    // Plugin not available or endpoint unreachable — fall through to GitHub API.
+    return false;
+  }
+}
+
+// ── GitHub API fallback (for portable builds) ─────────────────────────────
+
+/**
+ * Poll GitHub Releases API with ETag caching to check for newer versions.
+ * Used when the native Tauri updater isn't available.
+ */
+async function checkViaGitHub() {
+  try {
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github.v3+json',
+    };
+    if (cachedEtag) {
+      headers['If-None-Match'] = cachedEtag;
+    }
+
+    const response = await fetch(RELEASES_API, { headers });
+
+    // 304 Not Modified — cached data is still valid.
+    if (response.status === 304 && cachedRelease) {
+      applyGitHubRelease(cachedRelease);
+      return;
+    }
 
     if (!response.ok) {
-      // 404 means no releases yet, or repo doesn't exist — not an error.
+      // 404 = no releases yet, other errors = transient. Either way, ignore.
       return;
+    }
+
+    // Cache the ETag for next request.
+    const etag = response.headers.get('ETag');
+    if (etag) {
+      cachedEtag = etag;
     }
 
     const release = await response.json();
@@ -186,20 +244,86 @@ async function checkForUpdates() {
     const htmlUrl: string = release.html_url ?? '';
 
     if (tagName) {
-      setLatestVersion(tagName);
-      setReleaseUrl(htmlUrl);
-
-      const current = currentVersion();
-      if (current && isNewer(current, tagName)) {
-        setUpdateAvailable(true);
-      } else {
-        setUpdateAvailable(false);
-      }
+      cachedRelease = { tag_name: tagName, html_url: htmlUrl };
+      applyGitHubRelease(cachedRelease);
     }
   } catch {
     // Network errors are silently ignored — update checking is best-effort.
+  }
+}
+
+function applyGitHubRelease(release: { tag_name: string; html_url: string }) {
+  setLatestVersion(release.tag_name);
+  setReleaseUrl(release.html_url);
+  setCanAutoUpdate(false);
+
+  const current = currentVersion();
+  if (current && isNewer(current, release.tag_name)) {
+    setUpdateAvailable(true);
+  } else {
+    setUpdateAvailable(false);
+  }
+}
+
+// ── Unified check ─────────────────────────────────────────────────────────
+
+async function checkForUpdates() {
+  if (checking()) return;
+  setChecking(true);
+
+  try {
+    const handled = await tryNativeUpdater();
+    if (!handled) {
+      await checkViaGitHub();
+    }
   } finally {
     setChecking(false);
+  }
+}
+
+// ── Update actions ────────────────────────────────────────────────────────
+
+/**
+ * Install the pending update and restart the app.
+ * Only works when canAutoUpdate() is true (installed builds).
+ */
+async function installUpdate() {
+  if (!pendingUpdate) return;
+
+  try {
+    let totalBytes = 0;
+    let downloadedBytes = 0;
+
+    setUpdateProgress({ phase: 'downloading', percent: 0 });
+
+    await pendingUpdate.downloadAndInstall(event => {
+      switch (event.event) {
+        case 'Started':
+          totalBytes = event.data.contentLength ?? 0;
+          break;
+        case 'Progress':
+          downloadedBytes += event.data.chunkLength;
+          setUpdateProgress({
+            phase: 'downloading',
+            percent: totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : null,
+          });
+          break;
+        case 'Finished':
+          setUpdateProgress({ phase: 'installing', percent: null });
+          break;
+      }
+    });
+
+    setUpdateProgress({ phase: 'done', percent: 100 });
+
+    // Brief delay so the user sees "done" before the app restarts.
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await relaunch();
+  } catch (err) {
+    console.error('Update install failed:', err);
+    setUpdateProgress(null);
+    // Fall back to opening the release page.
+    openReleasePage();
   }
 }
 
@@ -220,8 +344,8 @@ function initUpdater() {
       const version = await getVersion();
       setCurrentVersion(version);
     } catch {
-      // Fallback if getVersion() fails (e.g. in dev mode without Tauri context).
-      setCurrentVersion('0.1.0');
+      // Dev mode fallback — read from Vite env if available, else hardcode.
+      setCurrentVersion('0.0.0-dev');
     }
 
     // Initial check (delayed slightly so the UI loads first).
@@ -240,7 +364,10 @@ export {
   currentVersion,
   latestVersion,
   updateAvailable,
+  canAutoUpdate,
+  updateProgress,
   releaseUrl,
   openReleasePage,
+  installUpdate,
   checkForUpdates,
 };

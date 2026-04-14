@@ -47,6 +47,11 @@ jobs:
       - name: Build Tauri app (MSI)
         run: cargo tauri build --bundles msi
 
+      - name: Copy portable EXE
+        shell: bash
+        run: |
+          cp src-tauri/target/release/device-manager-pp.exe "src-tauri/target/release/Device Manager++.exe"
+
       - name: Determine version
         id: version
         shell: bash
@@ -78,6 +83,13 @@ jobs:
           path: ${{ steps.find-msi.outputs.msi_path }}
           if-no-files-found: error
 
+      - name: Upload portable EXE as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-manager-pp-portable
+          path: "src-tauri/target/release/Device Manager++.exe"
+          if-no-files-found: error
+
   release:
     name: Create GitHub Release
     needs: build-msi
@@ -104,6 +116,12 @@ jobs:
           name: device-manager-pp-msi
           path: artifacts/
 
+      - name: Download portable EXE artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: device-manager-pp-portable
+          path: artifacts/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -112,4 +130,6 @@ jobs:
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           generate_release_notes: true
-          files: artifacts/*.msi
+          files: |
+            artifacts/*.msi
+            artifacts/*.exe

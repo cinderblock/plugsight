@@ -16,6 +16,23 @@ pub fn get_all_devices() -> Result<Vec<DeviceInfo>, String> {
     Ok(enumerator::enumerate_all_devices())
 }
 
+/// Stream the initial device enumeration to the frontend as individual Added events.
+///
+/// Call this after subscribing to device events so the UI populates progressively.
+/// Each device is emitted as it's discovered rather than waiting for the full list.
+#[tauri::command]
+pub fn stream_initial_devices(app: tauri::AppHandle) -> Result<(), String> {
+    use crate::device::types::DeviceEvent;
+    use tauri::Emitter;
+
+    let devices = enumerator::enumerate_all_devices();
+    for device in devices {
+        let _ = app.emit("device-event", &DeviceEvent::Added { device });
+    }
+    let _ = app.emit("device-event", &DeviceEvent::EnumerationComplete);
+    Ok(())
+}
+
 /// Get detailed info for a single device by instance ID.
 #[tauri::command]
 pub fn get_device_detail(instance_id: String) -> Result<Option<DeviceInfo>, String> {

@@ -10,6 +10,7 @@ pub fn run() {
             commands::get_device_detail,
             commands::get_class_metadata,
             commands::get_class_icons,
+            commands::stream_initial_devices,
             commands::scan_for_hardware_changes,
         ])
         .setup(|app| {

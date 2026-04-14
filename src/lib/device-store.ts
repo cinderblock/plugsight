@@ -13,7 +13,7 @@ import { createSignal, createMemo, createEffect, batch, onCleanup, onMount } fro
 import { createStore, produce } from 'solid-js/store';
 import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice } from './types';
 import { hasDeviceProblem } from './types';
-import { onDeviceEvent, getAllDevices } from './tauri';
+import { onDeviceEvent, streamInitialDevices } from './tauri';
 import { CLASS_ICON_MAP } from './icons';
 import { loadClassIcons } from './icon-cache';
 
@@ -102,6 +102,11 @@ function handleDeviceEvent(event: DeviceEvent) {
       break;
     case 'enumerationComplete':
       setState('enumerationComplete', true);
+      // Load real Windows icons for all discovered device classes.
+      {
+        const uniqueGuids = [...new Set(Object.values(state.devices).map(d => d.classGuid))];
+        loadClassIcons(uniqueGuids);
+      }
       break;
   }
 }
@@ -450,27 +455,13 @@ function initDeviceStore() {
   let unlisten: (() => void) | null = null;
 
   onMount(async () => {
-    // 1. Subscribe to live change events from the DeviceWatcher.
+    // 1. Subscribe to device events first.
     unlisten = await onDeviceEvent(handleDeviceEvent);
 
-    // 2. Load the initial device list via SetupAPI (reliable, full properties).
-    //    The DeviceWatcher will handle incremental changes from this point on.
-    try {
-      const devices = await getAllDevices();
-      batch(() => {
-        for (const device of devices) {
-          setState('devices', device.instanceId, device);
-        }
-        setState('enumerationComplete', true);
-      });
-
-      // Load real Windows icons for all discovered device classes.
-      const uniqueGuids = [...new Set(devices.map(d => d.classGuid))];
-      loadClassIcons(uniqueGuids);
-    } catch (e) {
-      console.error('Failed to enumerate devices:', e);
-      setState('enumerationComplete', true);
-    }
+    // 2. Now that we're listening, ask the backend to stream the initial
+    //    device list as individual Added events. The UI populates progressively
+    //    as each device is discovered. An EnumerationComplete event follows.
+    streamInitialDevices();
   });
 
   // Periodic ghost sweeper.

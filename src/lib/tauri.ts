@@ -31,6 +31,11 @@ export async function getClassIcons(classGuids: string[]): Promise<Record<string
   return invoke<Record<string, string>>('get_class_icons', { classGuids });
 }
 
+/** Stream the initial device enumeration as individual Added events. */
+export async function streamInitialDevices(): Promise<void> {
+  return invoke<void>('stream_initial_devices');
+}
+
 /** Trigger a hardware re-scan. */
 export async function scanForHardwareChanges(): Promise<void> {
   return invoke<void>('scan_for_hardware_changes');

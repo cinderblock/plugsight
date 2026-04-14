@@ -48,6 +48,8 @@ pub fn start_watcher(app_handle: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to create DeviceWatcher: {e}"))?;
 
     // Build the initial snapshot so we can diff against it.
+    // The frontend triggers the initial streaming enumeration via a command
+    // (after it has subscribed to events), so we just build the known map here.
     let initial_devices = enumerator::enumerate_all_devices();
     let mut known_map = HashMap::new();
     for device in initial_devices {

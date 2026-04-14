@@ -25,6 +25,7 @@ interface DeviceEntryProps {
 const DeviceEntry: Component<DeviceEntryProps> = props => {
   const device = () => props.displayDevice.device;
   const isGhost = () => props.displayDevice.isGhost;
+  const isVisible = () => props.displayDevice.visible;
   const isSelected = () => selectedId() === device().instanceId;
   const isRecentChange = () => recentChanges().has(device().instanceId);
   const hasProblem = () => hasDeviceProblem(device().status);
@@ -57,8 +58,13 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
   };
 
   return (
+    <div
+      class="grid transition-[grid-template-rows] duration-300 ease-out"
+      style={{ "grid-template-rows": isVisible() ? "1fr" : "0fr" }}
+    >
+    <div class="overflow-hidden">
     <button
-      class={`device-entry group w-full text-left flex items-center gap-3 px-3 py-2 rounded-r-lg transition-all duration-200
+      class={`device-entry group w-full text-left flex items-center gap-3 px-3 py-1 rounded-r-lg transition-all duration-200
         ${borderClass()}
         ${isGhost() ? 'opacity-45 bg-gray-50 dark:bg-gray-800/30' : ''}
         ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-300 dark:ring-blue-700' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}
@@ -148,6 +154,8 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
         </Show>
       </div>
     </button>
+    </div>
+    </div>
   );
 };
 

@@ -276,41 +276,47 @@ const categories = createMemo<DeviceCategory[]>(() => {
         iconId: CLASS_ICON_MAP[device.classGuid.toLowerCase()] ?? 'other',
         devices: [],
         problemCount: 0,
+        visible: true,
       };
       catMap.set(device.classGuid, cat);
     }
     return cat;
   };
 
-  // Add live devices.
+  // Add live devices (always included, visibility determined by filters).
   for (const device of Object.values(state.devices)) {
-    if (hiddenClasses.has(device.classGuid)) continue;
-    if (hiddenDevices.has(device.instanceId)) continue;
-    if (query && !matchesSearch(device, query)) continue;
-    if (problemsOnly && !hasDeviceProblem(device.status)) continue;
     const cat = getCategory(device);
-    cat.devices.push({ device, isGhost: false });
-    if (hasDeviceProblem(device.status)) cat.problemCount++;
+    const visible =
+      !hiddenClasses.has(device.classGuid) &&
+      !hiddenDevices.has(device.instanceId) &&
+      (!query || matchesSearch(device, query)) &&
+      (!problemsOnly || hasDeviceProblem(device.status));
+    cat.devices.push({ device, isGhost: false, visible });
+    if (visible && hasDeviceProblem(device.status)) cat.problemCount++;
   }
 
-  // Add ghost devices (excluded when filtering to problems only).
+  // Add ghost devices (hidden when filtering to problems only).
   for (const ghost of Object.values(state.ghosts)) {
-    if (problemsOnly) continue;
-    if (hiddenClasses.has(ghost.device.classGuid)) continue;
-    if (hiddenDevices.has(ghost.device.instanceId)) continue;
-    if (query && !matchesSearch(ghost.device, query)) continue;
     const cat = getCategory(ghost.device);
+    const visible =
+      !problemsOnly &&
+      !hiddenClasses.has(ghost.device.classGuid) &&
+      !hiddenDevices.has(ghost.device.instanceId) &&
+      (!query || matchesSearch(ghost.device, query));
     cat.devices.push({
       device: ghost.device,
       isGhost: true,
       ghostRemovedAt: ghost.removedAt,
+      visible,
     });
   }
 
   // Sort categories by name, then devices within each category by name.
+  // Mark categories as hidden if they have no visible devices.
   const result = Array.from(catMap.values());
   result.sort((a, b) => a.className.localeCompare(b.className));
   for (const cat of result) {
+    cat.visible = cat.devices.some(d => d.visible);
     cat.devices.sort((a, b) => {
       // Ghosts sort to the end.
       if (a.isGhost !== b.isGhost) return a.isGhost ? 1 : -1;
@@ -337,10 +343,10 @@ const selectedDevice = createMemo<DisplayDevice | null>(() => {
   if (!id) return null;
 
   const live = state.devices[id];
-  if (live) return { device: live, isGhost: false };
+  if (live) return { device: live, isGhost: false, visible: true };
 
   const ghost = state.ghosts[id];
-  if (ghost) return { device: ghost.device, isGhost: true, ghostRemovedAt: ghost.removedAt };
+  if (ghost) return { device: ghost.device, isGhost: true, ghostRemovedAt: ghost.removedAt, visible: true };
 
   return null;
 });

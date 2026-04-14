@@ -6,8 +6,7 @@
  */
 
 import type { Component } from 'solid-js';
-import { For, Show } from 'solid-js';
-import { TransitionGroup } from 'solid-transition-group';
+import { Index, Show } from 'solid-js';
 import type { DeviceCategory as DeviceCategoryType } from '~/lib/types';
 import { toggleCategory, state, showProblemsOnly, hideCategory, soloCategory, recentAddsPerClass, recentRemovesPerClass } from '~/lib/device-store';
 import DeviceIcon from './DeviceIcon';
@@ -20,17 +19,22 @@ interface DeviceCategoryProps {
 const DeviceCategory: Component<DeviceCategoryProps> = props => {
   const cat = () => props.category;
   const isExpanded = () => showProblemsOnly() || (state.expandedCategories[cat().classGuid] ?? false);
-  const totalCount = () => cat().devices.length;
-  const ghostCount = () => cat().devices.filter(d => d.isGhost).length;
-  const liveCount = () => totalCount() - ghostCount();
+  const visibleDevices = () => cat().devices.filter(d => d.visible);
+  const liveCount = () => visibleDevices().filter(d => !d.isGhost).length;
+  const ghostCount = () => visibleDevices().filter(d => d.isGhost).length;
   const recentAdds = () => recentAddsPerClass()[cat().classGuid] ?? 0;
   const recentRemoves = () => recentRemovesPerClass()[cat().classGuid] ?? 0;
 
   return (
+    <div
+      class="grid transition-[grid-template-rows] duration-300 ease-out"
+      style={{ "grid-template-rows": cat().visible ? "1fr" : "0fr" }}
+    >
+    <div class="overflow-hidden">
     <div class="category-group group/cat">
       {/* Category header — single row, hover covers the full width */}
       <button
-        class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-colors"
+        class="w-full flex items-center gap-2.5 px-3 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-colors"
         onClick={() => toggleCategory(cat().classGuid)}
       >
         {/* Expand/collapse chevron */}
@@ -128,19 +132,13 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
         style={{ "grid-template-rows": isExpanded() ? "1fr" : "0fr" }}
       >
         <div class="overflow-hidden">
-          <TransitionGroup
-            enterClass="device-enter"
-            enterActiveClass="device-enter-active"
-            exitClass="device-exit"
-            exitActiveClass="device-exit-active"
-            moveClass="device-move"
-          >
-            <For each={cat().devices}>
-              {displayDevice => <DeviceEntry displayDevice={displayDevice} />}
-            </For>
-          </TransitionGroup>
+          <Index each={cat().devices}>
+            {displayDevice => <DeviceEntry displayDevice={displayDevice()} />}
+          </Index>
         </div>
       </div>
+    </div>
+    </div>
     </div>
   );
 };

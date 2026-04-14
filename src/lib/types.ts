@@ -49,6 +49,8 @@ export interface DisplayDevice {
   device: DeviceInfo;
   isGhost: boolean;
   ghostRemovedAt?: number;
+  /** Whether this device passes the current filters (false = collapsed/hidden). */
+  visible: boolean;
 }
 
 /** A category group for the device tree. */
@@ -59,6 +61,8 @@ export interface DeviceCategory {
   devices: DisplayDevice[];
   /** Number of devices with problems in this category. */
   problemCount: number;
+  /** Whether this category passes the current filters (false = collapsed/hidden). */
+  visible: boolean;
 }
 
 /** Returns true if the device has a problem. */

@@ -6,7 +6,7 @@
  */
 
 import type { Component } from 'solid-js';
-import { For, Show } from 'solid-js';
+import { Index, Show } from 'solid-js';
 import { categories, state } from '~/lib/device-store';
 import DeviceCategory from './DeviceCategory';
 
@@ -37,9 +37,9 @@ const DeviceTree: Component = () => {
       </Show>
 
       {/* Device categories */}
-      <For each={categories()}>
-        {category => <DeviceCategory category={category} />}
-      </For>
+      <Index each={categories()}>
+        {category => <DeviceCategory category={category()} />}
+      </Index>
     </div>
   );
 };

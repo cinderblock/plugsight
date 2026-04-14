@@ -341,6 +341,24 @@ function hideCategory(classGuid: string) {
   });
 }
 
+/** Hide all categories except the given one. */
+function soloCategory(classGuid: string) {
+  // Collect all class GUIDs from current devices, then hide everything except the target.
+  const allGuids = new Set<string>();
+  for (const device of Object.values(state.devices)) {
+    allGuids.add(device.classGuid);
+  }
+  for (const ghost of Object.values(state.ghosts)) {
+    allGuids.add(ghost.device.classGuid);
+  }
+  allGuids.delete(classGuid);
+  setHiddenClassGuids(allGuids);
+  // Clear device-level hides so devices within the solo'd category aren't hidden.
+  setHiddenDeviceIds(new Set());
+  // Auto-expand the solo'd category.
+  setState('expandedCategories', classGuid, true);
+}
+
 function clearAllFilters() {
   batch(() => {
     setSearchQuery('');
@@ -411,5 +429,6 @@ export {
   clearAllGhosts,
   hideDevice,
   hideCategory,
+  soloCategory,
   clearAllFilters,
 };

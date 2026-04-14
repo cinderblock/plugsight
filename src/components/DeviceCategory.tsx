@@ -9,7 +9,7 @@ import type { Component } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { TransitionGroup } from 'solid-transition-group';
 import type { DeviceCategory as DeviceCategoryType } from '~/lib/types';
-import { toggleCategory, state, showProblemsOnly, hideCategory } from '~/lib/device-store';
+import { toggleCategory, state, showProblemsOnly, hideCategory, soloCategory } from '~/lib/device-store';
 import DeviceIcon from './DeviceIcon';
 import DeviceEntry from './DeviceEntry';
 
@@ -78,18 +78,33 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
         </div>
       </button>
 
-        {/* Hide category button (visible on hover) */}
-        <button
-          class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 opacity-0 group-hover/cat:opacity-100 transition-all"
-          title="Hide this category"
-          onClick={() => hideCategory(cat().classGuid)}
-        >
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
-            <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
-            <line x1="1" y1="1" x2="23" y2="23" />
-          </svg>
-        </button>
+        {/* Category action buttons (visible on hover) */}
+        <div class="flex items-center gap-0.5 opacity-0 group-hover/cat:opacity-100 transition-opacity">
+          {/* Solo — show only this category */}
+          <button
+            class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            title="Show only this category"
+            onClick={() => soloCategory(cat().classGuid)}
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+
+          {/* Hide this category */}
+          <button
+            class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            title="Hide this category"
+            onClick={() => hideCategory(cat().classGuid)}
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+              <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+              <line x1="1" y1="1" x2="23" y2="23" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Device entries — drawer animation via CSS grid, per-device animation via TransitionGroup */}

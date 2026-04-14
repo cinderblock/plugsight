@@ -13,6 +13,8 @@ import {
   expandAllCategories,
   collapseAllCategories,
   clearAllGhosts,
+  hasActiveFilters,
+  clearAllFilters,
 } from '~/lib/device-store';
 import { scanForHardwareChanges } from '~/lib/tauri';
 
@@ -92,6 +94,21 @@ const Toolbar: Component = () => {
             </svg>
           }
         />
+
+        <Show when={hasActiveFilters()}>
+          <div class="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
+          <button
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50 transition-colors cursor-pointer"
+            title="Clear all filters (search, hidden items, problems only)"
+            onClick={clearAllFilters}
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+            Clear filters
+          </button>
+        </Show>
 
         <Show when={counts().ghosts > 0}>
           <div class="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />

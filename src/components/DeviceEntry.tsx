@@ -13,7 +13,7 @@ import type { Component } from 'solid-js';
 import { Show, createMemo } from 'solid-js';
 import type { DisplayDevice } from '~/lib/types';
 import { hasDeviceProblem, statusLabel } from '~/lib/types';
-import { selectedId, setSelectedId, recentChanges, dismissGhost } from '~/lib/device-store';
+import { selectedId, setSelectedId, recentChanges, dismissGhost, hideDevice } from '~/lib/device-store';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
 import { CLASS_ICON_MAP } from '~/lib/icons';
@@ -58,7 +58,7 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
 
   return (
     <button
-      class={`device-entry w-full text-left flex items-center gap-3 px-3 py-2 rounded-r-lg transition-all duration-200
+      class={`device-entry group w-full text-left flex items-center gap-3 px-3 py-2 rounded-r-lg transition-all duration-200
         ${borderClass()}
         ${isGhost() ? 'opacity-45 bg-gray-50 dark:bg-gray-800/30' : ''}
         ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-300 dark:ring-blue-700' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}
@@ -110,22 +110,43 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
         </div>
       </div>
 
-      {/* Ghost dismiss button */}
-      <Show when={isGhost()}>
-        <button
-          class="shrink-0 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-          title="Dismiss"
+      {/* Action buttons (visible on hover) — use div, not button, to avoid nesting inside parent <button> */}
+      <div class="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Hide button */}
+        <div
+          role="button"
+          class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+          title="Hide this device"
           onClick={e => {
             e.stopPropagation();
-            dismissGhost(device().instanceId);
+            hideDevice(device().instanceId);
           }}
         >
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
+            <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+            <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+            <line x1="1" y1="1" x2="23" y2="23" />
           </svg>
-        </button>
-      </Show>
+        </div>
+
+        {/* Ghost dismiss button */}
+        <Show when={isGhost()}>
+          <div
+            role="button"
+            class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+            title="Dismiss"
+            onClick={e => {
+              e.stopPropagation();
+              dismissGhost(device().instanceId);
+            }}
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </div>
+        </Show>
+      </div>
     </button>
   );
 };

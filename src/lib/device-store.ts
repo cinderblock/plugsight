@@ -45,6 +45,8 @@ interface DeviceStoreState {
 const [selectedId, setSelectedId] = createSignal<string | null>(null);
 const [searchQuery, setSearchQuery] = createSignal('');
 const [showProblemsOnly, setShowProblemsOnly] = createSignal(false);
+const [hiddenDeviceIds, setHiddenDeviceIds] = createSignal<Set<string>>(new Set());
+const [hiddenClassGuids, setHiddenClassGuids] = createSignal<Set<string>>(new Set());
 const [recentChanges, setRecentChanges] = createSignal<Set<string>>(new Set());
 
 // ── Store ─────────────────────────────────────────────────────────────────
@@ -191,6 +193,8 @@ function sweepGhosts() {
 const categories = createMemo<DeviceCategory[]>(() => {
   const query = searchQuery().toLowerCase().trim();
   const problemsOnly = showProblemsOnly();
+  const hiddenDevices = hiddenDeviceIds();
+  const hiddenClasses = hiddenClassGuids();
   const catMap = new Map<string, DeviceCategory>();
 
   // Helper to get or create a category.
@@ -211,6 +215,8 @@ const categories = createMemo<DeviceCategory[]>(() => {
 
   // Add live devices.
   for (const device of Object.values(state.devices)) {
+    if (hiddenClasses.has(device.classGuid)) continue;
+    if (hiddenDevices.has(device.instanceId)) continue;
     if (query && !matchesSearch(device, query)) continue;
     if (problemsOnly && !hasDeviceProblem(device.status)) continue;
     const cat = getCategory(device);
@@ -221,6 +227,8 @@ const categories = createMemo<DeviceCategory[]>(() => {
   // Add ghost devices (excluded when filtering to problems only).
   for (const ghost of Object.values(state.ghosts)) {
     if (problemsOnly) continue;
+    if (hiddenClasses.has(ghost.device.classGuid)) continue;
+    if (hiddenDevices.has(ghost.device.instanceId)) continue;
     if (query && !matchesSearch(ghost.device, query)) continue;
     const cat = getCategory(ghost.device);
     cat.devices.push({
@@ -278,6 +286,14 @@ const counts = createMemo(() => {
   };
 });
 
+/** Whether any filters are actively hiding content. */
+const hasActiveFilters = createMemo(() =>
+  searchQuery() !== '' ||
+  showProblemsOnly() ||
+  hiddenDeviceIds().size > 0 ||
+  hiddenClassGuids().size > 0,
+);
+
 // ── Actions ───────────────────────────────────────────────────────────────
 
 function toggleCategory(classGuid: string) {
@@ -307,6 +323,31 @@ function dismissGhost(instanceId: string) {
 
 function clearAllGhosts() {
   setState('ghosts', {});
+}
+
+function hideDevice(instanceId: string) {
+  setHiddenDeviceIds(prev => {
+    const next = new Set(prev);
+    next.add(instanceId);
+    return next;
+  });
+}
+
+function hideCategory(classGuid: string) {
+  setHiddenClassGuids(prev => {
+    const next = new Set(prev);
+    next.add(classGuid);
+    return next;
+  });
+}
+
+function clearAllFilters() {
+  batch(() => {
+    setSearchQuery('');
+    setShowProblemsOnly(false);
+    setHiddenDeviceIds(new Set());
+    setHiddenClassGuids(new Set());
+  });
 }
 
 // ── Initialization ────────────────────────────────────────────────────────
@@ -359,6 +400,7 @@ export {
   setSearchQuery,
   showProblemsOnly,
   setShowProblemsOnly,
+  hasActiveFilters,
   counts,
   recentChanges,
   // Actions
@@ -367,4 +409,7 @@ export {
   collapseAllCategories,
   dismissGhost,
   clearAllGhosts,
+  hideDevice,
+  hideCategory,
+  clearAllFilters,
 };

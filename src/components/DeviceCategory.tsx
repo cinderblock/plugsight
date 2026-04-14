@@ -9,7 +9,7 @@ import type { Component } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { TransitionGroup } from 'solid-transition-group';
 import type { DeviceCategory as DeviceCategoryType } from '~/lib/types';
-import { toggleCategory } from '~/lib/device-store';
+import { toggleCategory, state, showProblemsOnly } from '~/lib/device-store';
 import DeviceIcon from './DeviceIcon';
 import DeviceEntry from './DeviceEntry';
 
@@ -19,6 +19,7 @@ interface DeviceCategoryProps {
 
 const DeviceCategory: Component<DeviceCategoryProps> = props => {
   const cat = () => props.category;
+  const isExpanded = () => showProblemsOnly() || (state.expandedCategories[cat().classGuid] ?? false);
   const totalCount = () => cat().devices.length;
   const ghostCount = () => cat().devices.filter(d => d.isGhost).length;
   const liveCount = () => totalCount() - ghostCount();
@@ -33,7 +34,7 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
         {/* Expand/collapse chevron */}
         <svg
           class={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 shrink-0 ${
-            cat().expanded ? 'rotate-90' : ''
+            isExpanded() ? 'rotate-90' : ''
           }`}
           viewBox="0 0 24 24"
           fill="none"
@@ -76,9 +77,12 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
         </div>
       </button>
 
-      {/* Device entries (animated) */}
-      <Show when={cat().expanded}>
-        <div class="ml-4 pl-2 border-l border-gray-200 dark:border-gray-700/50">
+      {/* Device entries — drawer animation via CSS grid, per-device animation via TransitionGroup */}
+      <div
+        class="ml-4 pl-2 border-l border-gray-200 dark:border-gray-700/50 grid transition-[grid-template-rows] duration-300 ease-out"
+        style={{ "grid-template-rows": isExpanded() ? "1fr" : "0fr" }}
+      >
+        <div class="overflow-hidden">
           <TransitionGroup
             enterClass="device-enter"
             enterActiveClass="device-enter-active"
@@ -91,7 +95,7 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
             </For>
           </TransitionGroup>
         </div>
-      </Show>
+      </div>
     </div>
   );
 };

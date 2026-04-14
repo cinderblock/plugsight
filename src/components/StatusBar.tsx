@@ -7,7 +7,7 @@
 
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
-import { counts, state } from '~/lib/device-store';
+import { counts, state, showProblemsOnly, setShowProblemsOnly } from '~/lib/device-store';
 import {
   currentVersion,
   latestVersion,
@@ -21,32 +21,38 @@ const StatusBar: Component = () => {
       {/* Left: app name + version */}
       <div class="flex items-center gap-2">
         <span class="text-xs text-gray-400 dark:text-gray-500">
-          Device Manager
+          Device Manager++
           <Show when={currentVersion()}>
             <span class="ml-1 tabular-nums">v{currentVersion()}</span>
           </Show>
         </span>
       </div>
 
-      {/* Center: device counts */}
-      <Show when={state.enumerationComplete}>
-        <div class="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 tabular-nums">
-          <span>{counts().total} devices</span>
-          <Show when={counts().problems > 0}>
-            <span class="text-red-500 dark:text-red-400 font-medium">
-              {counts().problems} problem{counts().problems !== 1 ? 's' : ''}
-            </span>
-          </Show>
-          <Show when={counts().ghosts > 0}>
-            <span class="italic">
-              {counts().ghosts} removed
-            </span>
-          </Show>
-        </div>
-      </Show>
-
-      {/* Right: update badge */}
-      <div class="flex items-center">
+      {/* Right: device counts + update badge */}
+      <div class="flex items-center gap-3">
+        <Show when={state.enumerationComplete}>
+          <div class="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 tabular-nums">
+            <span>{counts().total} devices</span>
+            <Show when={counts().problems > 0}>
+              <button
+                class={`font-medium cursor-pointer transition-colors rounded px-1.5 py-0.5 -my-0.5 ${
+                  showProblemsOnly()
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+                    : 'text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30'
+                }`}
+                onClick={() => setShowProblemsOnly(prev => !prev)}
+                title={showProblemsOnly() ? 'Show all devices' : 'Show only problem devices'}
+              >
+                {counts().problems} problem{counts().problems !== 1 ? 's' : ''}
+              </button>
+            </Show>
+            <Show when={counts().ghosts > 0}>
+              <span class="italic">
+                {counts().ghosts} removed
+              </span>
+            </Show>
+          </div>
+        </Show>
         <Show when={updateAvailable()}>
           <button
             class="update-badge inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors cursor-pointer"

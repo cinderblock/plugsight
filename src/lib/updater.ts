@@ -15,7 +15,7 @@ import { open } from '@tauri-apps/plugin-shell';
  * GitHub owner/repo for release checking.
  * Update this when the repo is created.
  */
-const GITHUB_OWNER = 'camero2734';
+const GITHUB_OWNER = 'cinderblock';
 const GITHUB_REPO = 'device-manager';
 
 /** How often to check for updates (ms). Default: 30 minutes. */

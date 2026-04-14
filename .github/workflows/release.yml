@@ -74,7 +74,7 @@ jobs:
       - name: Upload MSI as build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: device-manager-msi
+          name: device-manager-pp-msi
           path: ${{ steps.find-msi.outputs.msi_path }}
           if-no-files-found: error
 
@@ -101,14 +101,14 @@ jobs:
       - name: Download MSI artifact
         uses: actions/download-artifact@v4
         with:
-          name: device-manager-msi
+          name: device-manager-pp-msi
           path: artifacts/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: Device Manager ${{ steps.version.outputs.version }}
+          name: Device Manager++ ${{ steps.version.outputs.version }}
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           generate_release_notes: true

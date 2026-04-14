@@ -7,7 +7,6 @@
 
 import type { Component } from 'solid-js';
 import { For, Show } from 'solid-js';
-import { TransitionGroup } from 'solid-transition-group';
 import { categories, state } from '~/lib/device-store';
 import DeviceCategory from './DeviceCategory';
 
@@ -38,20 +37,9 @@ const DeviceTree: Component = () => {
       </Show>
 
       {/* Device categories */}
-      <TransitionGroup
-        enterClass="category-enter"
-        enterActiveClass="category-enter-active"
-        exitClass="category-exit"
-        exitActiveClass="category-exit-active"
-      >
-        <For each={categories()}>
-          {category => (
-            <div class="category-wrapper">
-              <DeviceCategory category={category} />
-            </div>
-          )}
-        </For>
-      </TransitionGroup>
+      <For each={categories()}>
+        {category => <DeviceCategory category={category} />}
+      </For>
     </div>
   );
 };

@@ -3,5 +3,5 @@
 
 fn main() {
     env_logger::init();
-    device_manager_lib::run();
+    device_manager_pp_lib::run();
 }

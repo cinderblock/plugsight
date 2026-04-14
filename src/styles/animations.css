@@ -1,5 +1,5 @@
 /*
- * Device Manager Animations
+ * Device Manager++ Animations
  *
  * These animations are what make this app fundamentally different from
  * the official Windows Device Manager. Instead of the whole list refreshing
@@ -12,43 +12,28 @@
 
 /* ── Device entry animations ────────────────────────────────────────── */
 
-/* A device appears (newly plugged in or discovered). */
+/* A device appears (newly plugged in or real-time add). */
 .device-enter {
   opacity: 0;
-  max-height: 0;
   transform: translateX(-12px);
-  overflow: hidden;
 }
 
 .device-enter-active {
   opacity: 1;
-  max-height: 60px;
   transform: translateX(0);
   transition:
     opacity 300ms ease-out,
-    max-height 300ms ease-out,
     transform 300ms ease-out;
 }
 
 /* A device is removed from the DOM (ghost expired). */
 .device-exit {
   opacity: 1;
-  max-height: 60px;
 }
 
 .device-exit-active {
   opacity: 0;
-  max-height: 0;
-  margin-top: 0;
-  margin-bottom: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  overflow: hidden;
-  transition:
-    opacity 250ms ease-in,
-    max-height 250ms ease-in 50ms,
-    margin 250ms ease-in 50ms,
-    padding 250ms ease-in 50ms;
+  transition: opacity 250ms ease-in;
 }
 
 /* Remaining devices slide smoothly when siblings appear/disappear (FLIP). */

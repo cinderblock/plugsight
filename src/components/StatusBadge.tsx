@@ -1,7 +1,7 @@
 /**
  * StatusBadge — large, clear device status indicators.
  *
- * This directly addresses the #1 complaint about the official Device Manager:
+ * This directly addresses the #1 complaint about the official Windows Device Manager:
  * the tiny 8x8 overlay icons are nearly invisible. Our badges are 28x28 with
  * bold colors, distinct shapes, and accompanying text.
  */

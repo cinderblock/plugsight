@@ -44,6 +44,7 @@ interface DeviceStoreState {
 
 const [selectedId, setSelectedId] = createSignal<string | null>(null);
 const [searchQuery, setSearchQuery] = createSignal('');
+const [showProblemsOnly, setShowProblemsOnly] = createSignal(false);
 const [recentChanges, setRecentChanges] = createSignal<Set<string>>(new Set());
 
 // ── Store ─────────────────────────────────────────────────────────────────
@@ -189,6 +190,7 @@ function sweepGhosts() {
 /** All devices grouped by category, including ghosts, filtered by search. */
 const categories = createMemo<DeviceCategory[]>(() => {
   const query = searchQuery().toLowerCase().trim();
+  const problemsOnly = showProblemsOnly();
   const catMap = new Map<string, DeviceCategory>();
 
   // Helper to get or create a category.
@@ -200,7 +202,6 @@ const categories = createMemo<DeviceCategory[]>(() => {
         className: device.className || 'Other devices',
         iconId: CLASS_ICON_MAP[device.classGuid.toLowerCase()] ?? 'other',
         devices: [],
-        expanded: state.expandedCategories[device.classGuid] ?? false,
         problemCount: 0,
       };
       catMap.set(device.classGuid, cat);
@@ -211,13 +212,15 @@ const categories = createMemo<DeviceCategory[]>(() => {
   // Add live devices.
   for (const device of Object.values(state.devices)) {
     if (query && !matchesSearch(device, query)) continue;
+    if (problemsOnly && !hasDeviceProblem(device.status)) continue;
     const cat = getCategory(device);
     cat.devices.push({ device, isGhost: false });
     if (hasDeviceProblem(device.status)) cat.problemCount++;
   }
 
-  // Add ghost devices.
+  // Add ghost devices (excluded when filtering to problems only).
   for (const ghost of Object.values(state.ghosts)) {
+    if (problemsOnly) continue;
     if (query && !matchesSearch(ghost.device, query)) continue;
     const cat = getCategory(ghost.device);
     cat.devices.push({
@@ -354,6 +357,8 @@ export {
   setSelectedId,
   searchQuery,
   setSearchQuery,
+  showProblemsOnly,
+  setShowProblemsOnly,
   counts,
   recentChanges,
   // Actions

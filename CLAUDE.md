@@ -1,4 +1,4 @@
-# Device Manager — Development Guide
+# Device Manager++ — Development Guide
 
 ## Architecture
 
@@ -9,9 +9,9 @@
 
 ## Key Design Decisions
 
-- **WinRT DeviceWatcher** provides incremental Added/Removed/Updated events — never a full list refresh. This is the core innovation over the official Device Manager.
+- **WinRT DeviceWatcher** provides incremental Added/Removed/Updated events — never a full list refresh. This is the core innovation over the official Windows Device Manager.
 - **Ghost entries**: Removed devices stay visible (faded) for 30 seconds so the user can see what disappeared.
-- **Status badges** are 28px inline elements (not tiny 8px icon overlays like the official Device Manager).
+- **Status badges** are 28px inline elements (not tiny 8px icon overlays like the official Windows Device Manager).
 - **SolidJS** was chosen over React for fine-grained reactivity: when one device changes, only that one DOM node updates.
 
 ## Commands

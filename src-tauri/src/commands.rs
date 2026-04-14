@@ -25,7 +25,7 @@ pub fn get_class_metadata() -> Result<Vec<ClassMeta>, String> {
     Ok(class_meta::all_known_classes())
 }
 
-/// Trigger a hardware scan (equivalent to "Scan for hardware changes" in Device Manager).
+/// Trigger a hardware scan (equivalent to "Scan for hardware changes" in the Windows Device Manager).
 #[tauri::command]
 pub fn scan_for_hardware_changes() -> Result<(), String> {
     // This uses CM_Reenumerate_DevNode on the root device node.

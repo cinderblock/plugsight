@@ -57,7 +57,6 @@ export interface DeviceCategory {
   className: string;
   iconId: string;
   devices: DisplayDevice[];
-  expanded: boolean;
   /** Number of devices with problems in this category. */
   problemCount: number;
 }

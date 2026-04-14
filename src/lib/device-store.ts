@@ -9,7 +9,7 @@
  * - Selection state
  */
 
-import { createSignal, createMemo, batch, onCleanup, onMount } from 'solid-js';
+import { createSignal, createMemo, createEffect, batch, onCleanup, onMount } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice } from './types';
 import { hasDeviceProblem } from './types';
@@ -18,6 +18,9 @@ import { CLASS_ICON_MAP } from './icons';
 import { loadClassIcons } from './icon-cache';
 
 // ── Configuration ─────────────────────────────────────────────────────────
+
+/** localStorage key for persisted filter/UI state. */
+const STORAGE_KEY = 'device-manager-pp:ui-state';
 
 /** How long (ms) a removed device stays visible as a ghost. */
 const GHOST_DURATION_MS = 30_000;
@@ -41,13 +44,35 @@ interface DeviceStoreState {
   expandedCategories: Record<string, boolean>;
 }
 
+// ── Persistence ──────────────────────────────────────────────────────────
+
+interface PersistedState {
+  searchQuery: string;
+  showProblemsOnly: boolean;
+  hiddenDeviceIds: string[];
+  hiddenClassGuids: string[];
+  expandedCategories: Record<string, boolean>;
+}
+
+function loadPersistedState(): Partial<PersistedState> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Partial<PersistedState>;
+  } catch {
+    return {};
+  }
+}
+
+const _saved = loadPersistedState();
+
 // ── Signals ───────────────────────────────────────────────────────────────
 
 const [selectedId, setSelectedId] = createSignal<string | null>(null);
-const [searchQuery, setSearchQuery] = createSignal('');
-const [showProblemsOnly, setShowProblemsOnly] = createSignal(false);
-const [hiddenDeviceIds, setHiddenDeviceIds] = createSignal<Set<string>>(new Set());
-const [hiddenClassGuids, setHiddenClassGuids] = createSignal<Set<string>>(new Set());
+const [searchQuery, setSearchQuery] = createSignal(_saved.searchQuery ?? '');
+const [showProblemsOnly, setShowProblemsOnly] = createSignal(_saved.showProblemsOnly ?? false);
+const [hiddenDeviceIds, setHiddenDeviceIds] = createSignal<Set<string>>(new Set(_saved.hiddenDeviceIds ?? []));
+const [hiddenClassGuids, setHiddenClassGuids] = createSignal<Set<string>>(new Set(_saved.hiddenClassGuids ?? []));
 const [recentChanges, setRecentChanges] = createSignal<Set<string>>(new Set());
 /** Recent add/remove counts per class GUID, for category header pills. */
 const [recentAddsPerClass, setRecentAddsPerClass] = createSignal<Record<string, number>>({});
@@ -59,7 +84,7 @@ const [state, setState] = createStore<DeviceStoreState>({
   devices: {},
   ghosts: {},
   enumerationComplete: false,
-  expandedCategories: {},
+  expandedCategories: _saved.expandedCategories ?? {},
 });
 
 // ── Event handling ────────────────────────────────────────────────────────
@@ -444,6 +469,22 @@ function initDeviceStore() {
 
   // Periodic ghost sweeper.
   const sweepTimer = setInterval(sweepGhosts, GHOST_SWEEP_INTERVAL_MS);
+
+  // Auto-save filter/UI state to localStorage on any change.
+  createEffect(() => {
+    const persisted: PersistedState = {
+      searchQuery: searchQuery(),
+      showProblemsOnly: showProblemsOnly(),
+      hiddenDeviceIds: [...hiddenDeviceIds()],
+      hiddenClassGuids: [...hiddenClassGuids()],
+      expandedCategories: { ...state.expandedCategories },
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    } catch {
+      // Storage full or unavailable — silently ignore.
+    }
+  });
 
   onCleanup(() => {
     unlisten?.();

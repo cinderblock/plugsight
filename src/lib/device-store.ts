@@ -390,7 +390,11 @@ function expandAllCategories() {
 }
 
 function collapseAllCategories() {
-  setState('expandedCategories', {});
+  batch(() => {
+    for (const key of Object.keys(state.expandedCategories)) {
+      setState('expandedCategories', key, false);
+    }
+  });
 }
 
 function dismissGhost(instanceId: string) {

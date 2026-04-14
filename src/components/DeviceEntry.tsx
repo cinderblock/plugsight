@@ -68,7 +68,7 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
     >
       {/* Device icon */}
       <div class={`shrink-0 ${isGhost() ? 'text-gray-400 dark:text-gray-600' : hasProblem() ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}`}>
-        <DeviceIcon iconId={iconId()} classGuid={device().classGuid} class="w-5 h-5" />
+        <DeviceIcon iconId={iconId()} classGuid={device().classGuid} class="w-6 h-6" />
       </div>
 
       {/* Device name and metadata */}
@@ -115,14 +115,14 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
         {/* Hide button */}
         <div
           role="button"
-          class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+          class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
           title="Hide this device"
           onClick={e => {
             e.stopPropagation();
             hideDevice(device().instanceId);
           }}
         >
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
             <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
             <line x1="1" y1="1" x2="23" y2="23" />
@@ -133,14 +133,14 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
         <Show when={isGhost()}>
           <div
             role="button"
-            class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+            class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
             title="Dismiss"
             onClick={e => {
               e.stopPropagation();
               dismissGhost(device().instanceId);
             }}
           >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>

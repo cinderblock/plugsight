@@ -26,12 +26,11 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
 
   return (
     <div class="category-group group/cat">
-      {/* Category header */}
-      <div class="flex items-center">
-        <button
-          class="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-colors"
-          onClick={() => toggleCategory(cat().classGuid)}
-        >
+      {/* Category header — single row, hover covers the full width */}
+      <button
+        class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-colors"
+        onClick={() => toggleCategory(cat().classGuid)}
+      >
         {/* Expand/collapse chevron */}
         <svg
           class={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 shrink-0 ${
@@ -47,7 +46,7 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
 
         {/* Category icon */}
         <div class="text-gray-500 dark:text-gray-400 shrink-0">
-          <DeviceIcon iconId={cat().iconId} classGuid={cat().classGuid} class="w-5 h-5" />
+          <DeviceIcon iconId={cat().iconId} classGuid={cat().classGuid} class="w-6 h-6" />
         </div>
 
         {/* Category name */}
@@ -76,13 +75,16 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
             {liveCount()}
           </span>
         </div>
-      </button>
 
-        {/* Category action buttons (visible on hover) */}
-        <div class="flex items-center gap-0.5 opacity-0 group-hover/cat:opacity-100 transition-opacity">
+        {/* Category action buttons (visible on hover) — inside the button row for alignment */}
+        <div
+          class="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/cat:opacity-100 transition-opacity"
+          onClick={e => e.stopPropagation()}
+        >
           {/* Solo — show only this category */}
-          <button
-            class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          <div
+            role="button"
+            class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             title="Show only this category"
             onClick={() => soloCategory(cat().classGuid)}
           >
@@ -90,11 +92,12 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
-          </button>
+          </div>
 
           {/* Hide this category */}
-          <button
-            class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          <div
+            role="button"
+            class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             title="Hide this category"
             onClick={() => hideCategory(cat().classGuid)}
           >
@@ -103,9 +106,9 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
               <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
               <line x1="1" y1="1" x2="23" y2="23" />
             </svg>
-          </button>
+          </div>
         </div>
-      </div>
+      </button>
 
       {/* Device entries — drawer animation via CSS grid, per-device animation via TransitionGroup */}
       <div

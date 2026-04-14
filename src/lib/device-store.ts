@@ -49,6 +49,9 @@ const [showProblemsOnly, setShowProblemsOnly] = createSignal(false);
 const [hiddenDeviceIds, setHiddenDeviceIds] = createSignal<Set<string>>(new Set());
 const [hiddenClassGuids, setHiddenClassGuids] = createSignal<Set<string>>(new Set());
 const [recentChanges, setRecentChanges] = createSignal<Set<string>>(new Set());
+/** Recent add/remove counts per class GUID, for category header pills. */
+const [recentAddsPerClass, setRecentAddsPerClass] = createSignal<Record<string, number>>({});
+const [recentRemovesPerClass, setRecentRemovesPerClass] = createSignal<Record<string, number>>({});
 
 // ── Store ─────────────────────────────────────────────────────────────────
 
@@ -99,6 +102,11 @@ function handleDeviceAdded(device: DeviceInfo) {
 
     // Mark as recently changed for highlight animation.
     markRecentChange(device.instanceId);
+
+    // Track recent add for category pill (skip during initial enumeration).
+    if (state.enumerationComplete) {
+      markRecentAdd(device.classGuid);
+    }
   });
 }
 
@@ -106,6 +114,7 @@ function handleDeviceRemoved(instanceId: string) {
   const device = state.devices[instanceId];
   if (!device) return;
 
+  const classGuid = device.classGuid;
   const now = Date.now();
 
   batch(() => {
@@ -128,6 +137,9 @@ function handleDeviceRemoved(instanceId: string) {
 
     // Mark as recently changed.
     markRecentChange(instanceId);
+
+    // Track recent remove for category pill.
+    markRecentRemove(classGuid);
   });
 }
 
@@ -153,6 +165,37 @@ function markRecentChange(instanceId: string) {
       return next;
     });
   }, 2000);
+}
+
+/** How long (ms) the +/- pills stay visible on category headers. */
+const PILL_DURATION_MS = 5_000;
+
+function markRecentAdd(classGuid: string) {
+  setRecentAddsPerClass(prev => ({ ...prev, [classGuid]: (prev[classGuid] ?? 0) + 1 }));
+  setTimeout(() => {
+    setRecentAddsPerClass(prev => {
+      const count = (prev[classGuid] ?? 1) - 1;
+      if (count <= 0) {
+        const { [classGuid]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [classGuid]: count };
+    });
+  }, PILL_DURATION_MS);
+}
+
+function markRecentRemove(classGuid: string) {
+  setRecentRemovesPerClass(prev => ({ ...prev, [classGuid]: (prev[classGuid] ?? 0) + 1 }));
+  setTimeout(() => {
+    setRecentRemovesPerClass(prev => {
+      const count = (prev[classGuid] ?? 1) - 1;
+      if (count <= 0) {
+        const { [classGuid]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [classGuid]: count };
+    });
+  }, PILL_DURATION_MS);
 }
 
 function enforceGhostCap() {
@@ -426,6 +469,8 @@ export {
   hasActiveFilters,
   counts,
   recentChanges,
+  recentAddsPerClass,
+  recentRemovesPerClass,
   // Actions
   toggleCategory,
   expandAllCategories,

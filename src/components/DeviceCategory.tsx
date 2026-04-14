@@ -9,7 +9,7 @@ import type { Component } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { TransitionGroup } from 'solid-transition-group';
 import type { DeviceCategory as DeviceCategoryType } from '~/lib/types';
-import { toggleCategory, state, showProblemsOnly, hideCategory, soloCategory } from '~/lib/device-store';
+import { toggleCategory, state, showProblemsOnly, hideCategory, soloCategory, recentAddsPerClass, recentRemovesPerClass } from '~/lib/device-store';
 import DeviceIcon from './DeviceIcon';
 import DeviceEntry from './DeviceEntry';
 
@@ -23,6 +23,8 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
   const totalCount = () => cat().devices.length;
   const ghostCount = () => cat().devices.filter(d => d.isGhost).length;
   const liveCount = () => totalCount() - ghostCount();
+  const recentAdds = () => recentAddsPerClass()[cat().classGuid] ?? 0;
+  const recentRemoves = () => recentRemovesPerClass()[cat().classGuid] ?? 0;
 
   return (
     <div class="category-group group/cat">
@@ -50,31 +52,41 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
         </div>
 
         {/* Category name */}
-        <span class="text-sm font-semibold text-gray-800 dark:text-gray-200 flex-1 text-left truncate">
+        <span class="text-sm font-semibold text-gray-800 dark:text-gray-200 text-left truncate">
           {cat().className}
         </span>
 
-        {/* Counts */}
-        <div class="flex items-center gap-2 shrink-0">
-          {/* Problem count badge */}
-          <Show when={cat().problemCount > 0}>
-            <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
-              {cat().problemCount}
-            </span>
-          </Show>
-
-          {/* Ghost count */}
-          <Show when={ghostCount() > 0}>
-            <span class="text-xs text-gray-400 dark:text-gray-500 italic">
-              +{ghostCount()} removed
+        {/* Device count with +/- pills */}
+        <div class="flex items-center gap-1 shrink-0">
+          {/* Recent adds pill */}
+          <Show when={recentAdds() > 0}>
+            <span class="inline-flex items-center h-5 px-1.5 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 tabular-nums">
+              +{recentAdds()}
             </span>
           </Show>
 
           {/* Device count */}
-          <span class="text-xs text-gray-400 dark:text-gray-500 tabular-nums">
+          <span class="text-xs text-gray-400 dark:text-gray-500 tabular-nums min-w-[1.5rem] text-center">
             {liveCount()}
           </span>
+
+          {/* Recent removes pill */}
+          <Show when={recentRemoves() > 0}>
+            <span class="inline-flex items-center h-5 px-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 tabular-nums">
+              -{recentRemoves()}
+            </span>
+          </Show>
         </div>
+
+        {/* Spacer pushes error badge and action buttons to the right */}
+        <div class="flex-1" />
+
+        {/* Problem count badge — stays on the right */}
+        <Show when={cat().problemCount > 0}>
+          <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 shrink-0">
+            {cat().problemCount}
+          </span>
+        </Show>
 
         {/* Category action buttons (visible on hover) — inside the button row for alignment */}
         <div

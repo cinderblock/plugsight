@@ -15,8 +15,23 @@ import {
   clearAllGhosts,
   hasActiveFilters,
   clearAllFilters,
+  ghostTimeoutMs,
+  setGhostTimeoutMs,
+  GHOST_TIMEOUT_INDEFINITE,
 } from '~/lib/device-store';
 import { scanForHardwareChanges } from '~/lib/tauri';
+
+/** Presets for the ghost timeout selector (ms). 0 = keep indefinitely. */
+const GHOST_TIMEOUT_PRESETS: ReadonlyArray<{ ms: number; label: string }> = [
+  { ms: 5_000, label: '5s' },
+  { ms: 10_000, label: '10s' },
+  { ms: 30_000, label: '30s' },
+  { ms: 60_000, label: '1m' },
+  { ms: 5 * 60_000, label: '5m' },
+  { ms: 15 * 60_000, label: '15m' },
+  { ms: 60 * 60_000, label: '1h' },
+  { ms: GHOST_TIMEOUT_INDEFINITE, label: 'Never' },
+];
 
 const Toolbar: Component = () => {
   const handleScan = async () => {
@@ -124,9 +139,47 @@ const Toolbar: Component = () => {
           />
         </Show>
       </div>
+
+      {/* Ghost timeout selector — pinned to the right edge. */}
+      <label
+        class="ml-auto flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer"
+        title={
+          ghostTimeoutMs() === GHOST_TIMEOUT_INDEFINITE
+            ? 'Removed devices are kept indefinitely'
+            : `Removed devices disappear after ${formatTimeout(ghostTimeoutMs())}`
+        }
+      >
+        {/* Clock icon */}
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        <span class="hidden sm:inline">Hide after</span>
+        <select
+          value={ghostTimeoutMs()}
+          onChange={e => setGhostTimeoutMs(Number(e.currentTarget.value))}
+          class="text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors cursor-pointer tabular-nums"
+        >
+          {/* If the persisted value isn't a preset, include it as an extra option so the select shows it. */}
+          <Show when={!GHOST_TIMEOUT_PRESETS.some(p => p.ms === ghostTimeoutMs())}>
+            <option value={ghostTimeoutMs()}>{formatTimeout(ghostTimeoutMs())}</option>
+          </Show>
+          {GHOST_TIMEOUT_PRESETS.map(p => (
+            <option value={p.ms}>{p.label}</option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 };
+
+/** Format a timeout in ms as a short human string (e.g. "30s", "5m", "1h"). */
+function formatTimeout(ms: number): string {
+  if (ms === GHOST_TIMEOUT_INDEFINITE) return 'never';
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  if (ms < 60 * 60_000) return `${Math.round(ms / 60_000)}m`;
+  return `${Math.round(ms / (60 * 60_000))}h`;
+}
 
 /** A small toolbar icon button. */
 const ToolbarButton: Component<{ title: string; onClick: () => void; icon: any }> = props => (

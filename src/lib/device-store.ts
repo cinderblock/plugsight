@@ -22,8 +22,11 @@ import { loadClassIcons } from './icon-cache';
 /** localStorage key for persisted filter/UI state. */
 const STORAGE_KEY = 'device-manager-pp:ui-state';
 
-/** How long (ms) a removed device stays visible as a ghost. */
-const GHOST_DURATION_MS = 30_000;
+/** Default duration (ms) a removed device stays visible as a ghost. */
+const DEFAULT_GHOST_TIMEOUT_MS = 30_000;
+
+/** Special value for `ghostTimeoutMs` that means "keep ghosts indefinitely". */
+const GHOST_TIMEOUT_INDEFINITE = 0;
 
 /** Maximum number of ghost entries to keep. */
 const MAX_GHOSTS = 100;
@@ -52,6 +55,8 @@ interface PersistedState {
   hiddenDeviceIds: string[];
   hiddenClassGuids: string[];
   expandedCategories: Record<string, boolean>;
+  /** Ghost retention in ms. 0 means "never expire". */
+  ghostTimeoutMs: number;
 }
 
 function loadPersistedState(): Partial<PersistedState> {
@@ -73,6 +78,9 @@ const [searchQuery, setSearchQuery] = createSignal(_saved.searchQuery ?? '');
 const [showProblemsOnly, setShowProblemsOnly] = createSignal(_saved.showProblemsOnly ?? false);
 const [hiddenDeviceIds, setHiddenDeviceIds] = createSignal<Set<string>>(new Set(_saved.hiddenDeviceIds ?? []));
 const [hiddenClassGuids, setHiddenClassGuids] = createSignal<Set<string>>(new Set(_saved.hiddenClassGuids ?? []));
+const [ghostTimeoutMs, setGhostTimeoutMs] = createSignal<number>(
+  _saved.ghostTimeoutMs ?? DEFAULT_GHOST_TIMEOUT_MS,
+);
 const [recentChanges, setRecentChanges] = createSignal<Set<string>>(new Set());
 /** Recent add/remove counts per class GUID, for category header pills. */
 const [recentAddsPerClass, setRecentAddsPerClass] = createSignal<Record<string, number>>({});
@@ -148,11 +156,12 @@ function handleDeviceRemoved(instanceId: string) {
   const now = Date.now();
 
   batch(() => {
-    // Move to ghosts.
+    // Move to ghosts. Expiration is computed at sweep time against the
+    // current `ghostTimeoutMs()` setting, so changing the setting affects
+    // existing ghosts without re-stamping.
     setState('ghosts', instanceId, {
       device: { ...device, isPresent: false },
       removedAt: now,
-      expiresAt: now + GHOST_DURATION_MS,
     });
 
     // Remove from live devices.
@@ -245,10 +254,20 @@ function enforceGhostCap() {
   );
 }
 
-/** Sweep expired ghost entries. */
+/**
+ * Sweep expired ghost entries based on the current `ghostTimeoutMs()` setting.
+ *
+ * When the timeout is `GHOST_TIMEOUT_INDEFINITE` (0), ghosts are never swept
+ * and remain until manually dismissed or the MAX_GHOSTS cap is hit.
+ */
 function sweepGhosts() {
+  const timeout = ghostTimeoutMs();
+  if (timeout === GHOST_TIMEOUT_INDEFINITE) return;
+
   const now = Date.now();
-  const expired = Object.entries(state.ghosts).filter(([_, g]) => g.expiresAt <= now);
+  const expired = Object.entries(state.ghosts).filter(
+    ([_, g]) => now - g.removedAt >= timeout,
+  );
 
   if (expired.length > 0) {
     setState(
@@ -479,12 +498,21 @@ function initDeviceStore() {
       hiddenDeviceIds: [...hiddenDeviceIds()],
       hiddenClassGuids: [...hiddenClassGuids()],
       expandedCategories: { ...state.expandedCategories },
+      ghostTimeoutMs: ghostTimeoutMs(),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     } catch {
       // Storage full or unavailable — silently ignore.
     }
+  });
+
+  // Running a sweep when the timeout changes gives immediate feedback:
+  // shortening the timeout purges already-expired ghosts without waiting
+  // for the next periodic sweep tick.
+  createEffect(() => {
+    ghostTimeoutMs(); // track
+    sweepGhosts();
   });
 
   onCleanup(() => {
@@ -508,6 +536,9 @@ export {
   setSearchQuery,
   showProblemsOnly,
   setShowProblemsOnly,
+  ghostTimeoutMs,
+  setGhostTimeoutMs,
+  GHOST_TIMEOUT_INDEFINITE,
   hasActiveFilters,
   counts,
   recentChanges,

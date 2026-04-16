@@ -37,11 +37,16 @@ export interface ClassMeta {
   iconId: string;
 }
 
-/** A device that has been removed but is shown as a "ghost" for a period. */
+/**
+ * A device that has been removed but is shown as a "ghost" for a period.
+ *
+ * Expiration is computed dynamically from `removedAt + ghostTimeoutMs()` at
+ * sweep time, so changing the timeout setting immediately affects existing
+ * ghosts without having to re-stamp them.
+ */
 export interface GhostEntry {
   device: DeviceInfo;
   removedAt: number;
-  expiresAt: number;
 }
 
 /** Represents a device in the UI — either live or ghost. */

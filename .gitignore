@@ -6,6 +6,7 @@ bun.lock
 dist/
 src-tauri/target/
 src-tauri/gen/
+release-artifacts/
 
 # IDE
 .vscode/

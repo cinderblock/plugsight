@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "build:release": "cargo tauri build && bun run scripts/collect-artifacts.ts",
+    "collect:artifacts": "bun run scripts/collect-artifacts.ts",
     "version:bump": "bun run scripts/bump-version.ts",
     "version:check": "bun run scripts/bump-version.ts --dry-run"
   },

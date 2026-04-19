@@ -141,33 +141,40 @@ const Toolbar: Component = () => {
       </div>
 
       {/* Ghost timeout selector — pinned to the right edge. */}
-      <label
-        class="ml-auto flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer"
-        title={
-          ghostTimeoutMs() === GHOST_TIMEOUT_INDEFINITE
-            ? 'Removed devices are kept indefinitely'
-            : `Removed devices disappear after ${formatTimeout(ghostTimeoutMs())}`
-        }
-      >
-        {/* Clock icon */}
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="12 6 12 12 16 14" />
-        </svg>
-        <select
-          value={ghostTimeoutMs()}
-          onChange={e => setGhostTimeoutMs(Number(e.currentTarget.value))}
-          class="text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors cursor-pointer tabular-nums"
+      <div class="ml-auto flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+        {/* Clock icon — click to clear all ghost devices */}
+        <button
+          class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+          title="Clear all removed devices"
+          onClick={clearAllGhosts}
         >
-          {/* If the persisted value isn't a preset, include it as an extra option so the select shows it. */}
-          <Show when={!GHOST_TIMEOUT_PRESETS.some(p => p.ms === ghostTimeoutMs())}>
-            <option value={ghostTimeoutMs()}>{formatTimeout(ghostTimeoutMs())}</option>
-          </Show>
-          {GHOST_TIMEOUT_PRESETS.map(p => (
-            <option value={p.ms}>{p.label}</option>
-          ))}
-        </select>
-      </label>
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+        </button>
+        <label
+          title={
+            ghostTimeoutMs() === GHOST_TIMEOUT_INDEFINITE
+              ? 'Removed devices are kept indefinitely'
+              : `Removed devices disappear after ${formatTimeout(ghostTimeoutMs())}`
+          }
+        >
+          <select
+            value={ghostTimeoutMs()}
+            onChange={e => setGhostTimeoutMs(Number(e.currentTarget.value))}
+            class="text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors cursor-pointer tabular-nums"
+          >
+            {/* If the persisted value isn't a preset, include it as an extra option so the select shows it. */}
+            <Show when={!GHOST_TIMEOUT_PRESETS.some(p => p.ms === ghostTimeoutMs())}>
+              <option value={ghostTimeoutMs()}>{formatTimeout(ghostTimeoutMs())}</option>
+            </Show>
+            {GHOST_TIMEOUT_PRESETS.map(p => (
+              <option value={p.ms}>{p.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
     </div>
   );
 };

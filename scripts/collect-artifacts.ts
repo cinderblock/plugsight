@@ -15,7 +15,7 @@
  *   Device Manager++ Setup.exe.sig  — updater signature for NSIS installer
  *   Device Manager++.msi            — MSI installer (enterprise/GPO)
  *   Device Manager++.msi.sig        — updater signature for MSI installer
- *   Device Manager++.exe            — portable binary (raw exe, renamed)
+ *   Device Manager++ Portable.zip   — portable binary (zipped for distribution)
  *   latest.json                     — updater manifest
  *
  * Usage:
@@ -23,6 +23,7 @@
  *   bun run scripts/collect-artifacts.ts dist/out     # → custom dir
  */
 
+import { execSync } from 'child_process';
 import {
   copyFileSync,
   existsSync,
@@ -89,10 +90,13 @@ const msiSig = findFirst(msiDir, '.msi.sig');
 if (msiFile) copies.push({ src: msiFile, dest: join(OUT, `${PRODUCT}.msi`) });
 if (msiSig) copies.push({ src: msiSig, dest: join(OUT, `${PRODUCT}.msi.sig`) });
 
-// Portable EXE — the raw Rust binary, renamed to match product name.
+// Portable EXE — zipped for distribution. The raw binary is renamed to the
+// product name inside the archive so users see "Device Manager++.exe" when
+// they extract it.
+let portableSrc: string | null = null;
 const portable = join(TARGET_RELEASE, RAW_BINARY);
 if (existsSync(portable)) {
-  copies.push({ src: portable, dest: join(OUT, `${PRODUCT}.exe`) });
+  portableSrc = portable;
 }
 
 // Updater manifest. Tauri places it alongside whichever bundle was built last,
@@ -107,7 +111,7 @@ for (const dir of [nsisDir, msiDir]) {
 
 // ── Execute ──────────────────────────────────────────────────────────────
 
-if (copies.length === 0) {
+if (copies.length === 0 && !portableSrc) {
   console.error(
     'No release artifacts found. Run `cargo tauri build` first to produce the bundles.',
   );
@@ -124,6 +128,28 @@ for (const { src, dest, label } of copies) {
   copyFileSync(src, dest);
   const size = humanSize(statSync(dest).size);
   console.log(`  ${label ?? basename(dest).padEnd(32)}  ${size.padStart(10)}`);
+}
+
+// Portable ZIP — stage the exe with the display name, then compress.
+if (portableSrc) {
+  const zipName = `${PRODUCT} Portable.zip`;
+  const zipDest = join(OUT, zipName);
+  const stagingDir = join(OUT, '.portable-staging');
+  mkdirSync(stagingDir, { recursive: true });
+
+  const stagedExe = join(stagingDir, `${PRODUCT}.exe`);
+  copyFileSync(portableSrc, stagedExe);
+
+  // PowerShell's Compress-Archive is always available on Windows.
+  execSync(
+    `powershell -NoProfile -Command "Compress-Archive -Path '${stagedExe}' -DestinationPath '${zipDest}' -CompressionLevel Optimal"`,
+    { stdio: 'pipe' },
+  );
+
+  rmSync(stagingDir, { recursive: true, force: true });
+
+  const size = humanSize(statSync(zipDest).size);
+  console.log(`  ${zipName.padEnd(32)}  ${size.padStart(10)}`);
 }
 
 // Warn if signing artifacts are missing (signing wasn't enabled).

@@ -154,7 +154,6 @@ const Toolbar: Component = () => {
           <circle cx="12" cy="12" r="10" />
           <polyline points="12 6 12 12 16 14" />
         </svg>
-        <span class="hidden sm:inline">Hide after</span>
         <select
           value={ghostTimeoutMs()}
           onChange={e => setGhostTimeoutMs(Number(e.currentTarget.value))}

@@ -38,6 +38,12 @@ features = [
   "Win32_UI_WindowsAndMessaging",
 ]
 
+[profile.release]
+strip = true          # Strip debug symbols from the binary
+lto = true            # Full link-time optimization (smaller + faster)
+codegen-units = 1     # Single codegen unit for maximum optimization
+panic = "abort"       # Smaller binary — no unwinding tables
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

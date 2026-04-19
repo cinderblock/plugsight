@@ -14,6 +14,7 @@ pub fn run() {
             commands::get_class_icons,
             commands::stream_initial_devices,
             commands::scan_for_hardware_changes,
+            commands::open_device_properties,
         ])
         .setup(|app| {
             // Start the real-time device watcher on a background thread.

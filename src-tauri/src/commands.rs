@@ -54,6 +54,24 @@ pub fn get_class_icons(class_guids: Vec<String>) -> Result<HashMap<String, Strin
     Ok(class_icons::get_class_icons_batch(&class_guids))
 }
 
+/// Open the native Windows device properties dialog for a device.
+///
+/// Uses `rundll32.exe devmgr.dll,DeviceProperties_RunDLL` which is the same
+/// mechanism the built-in Device Manager uses internally.
+#[tauri::command]
+pub fn open_device_properties(instance_id: String) -> Result<(), String> {
+    use std::process::Command;
+
+    Command::new("rundll32.exe")
+        .arg("devmgr.dll,DeviceProperties_RunDLL")
+        .arg("/DeviceID")
+        .arg(&instance_id)
+        .spawn()
+        .map_err(|e| format!("Failed to open device properties: {e}"))?;
+
+    Ok(())
+}
+
 /// Trigger a hardware scan (equivalent to "Scan for hardware changes" in the Windows Device Manager).
 #[tauri::command]
 pub fn scan_for_hardware_changes() -> Result<(), String> {

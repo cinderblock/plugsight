@@ -41,6 +41,11 @@ export async function scanForHardwareChanges(): Promise<void> {
   return invoke<void>('scan_for_hardware_changes');
 }
 
+/** Open the native Windows device properties dialog for a device. */
+export async function openDeviceProperties(instanceId: string): Promise<void> {
+  return invoke<void>('open_device_properties', { instanceId });
+}
+
 // ── Events ────────────────────────────────────────────────────────────────
 
 /** Subscribe to real-time device change events from the backend watcher. */

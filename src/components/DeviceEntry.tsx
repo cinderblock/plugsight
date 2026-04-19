@@ -14,6 +14,7 @@ import { Show, createMemo } from 'solid-js';
 import type { DisplayDevice } from '~/lib/types';
 import { hasDeviceProblem, statusLabel } from '~/lib/types';
 import { selectedId, setSelectedId, recentChanges, dismissGhost, hideDevice } from '~/lib/device-store';
+import { openDeviceProperties } from '~/lib/tauri';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
 import { CLASS_ICON_MAP } from '~/lib/icons';
@@ -71,6 +72,7 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
         ${isRecentChange() ? 'device-entry--highlight' : ''}
       `}
       onClick={() => setSelectedId(device().instanceId)}
+      onDblClick={() => openDeviceProperties(device().instanceId)}
     >
       {/* Device icon */}
       <div class={`shrink-0 ${isGhost() ? 'text-gray-400 dark:text-gray-600' : hasProblem() ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}`}>
@@ -118,6 +120,23 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
 
       {/* Action buttons (visible on hover) — use div, not button, to avoid nesting inside parent <button> */}
       <div class="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Properties button */}
+        <div
+          role="button"
+          class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+          title="Properties"
+          onClick={e => {
+            e.stopPropagation();
+            openDeviceProperties(device().instanceId);
+          }}
+        >
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </div>
+
         {/* Hide button */}
         <div
           role="button"

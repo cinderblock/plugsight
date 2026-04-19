@@ -8,6 +8,7 @@
 import type { Component } from 'solid-js';
 import { Show, For } from 'solid-js';
 import { selectedDevice, setSelectedId } from '~/lib/device-store';
+import { openDeviceProperties } from '~/lib/tauri';
 import { statusLabel, hasDeviceProblem } from '~/lib/types';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
@@ -37,8 +38,19 @@ const DeviceDetail: Component = () => {
 
         return (
           <div class={`h-full overflow-y-auto p-4 ${isGhost() ? 'opacity-60' : ''}`}>
-            {/* Close button */}
-            <div class="flex justify-end mb-2">
+            {/* Action buttons */}
+            <div class="flex justify-end gap-1 mb-2">
+              <button
+                class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                onClick={() => openDeviceProperties(device().instanceId)}
+                title="Open Windows properties"
+              >
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </button>
               <button
                 class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 onClick={() => setSelectedId(null)}

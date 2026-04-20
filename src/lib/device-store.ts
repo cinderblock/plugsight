@@ -14,7 +14,6 @@ import { createStore, produce } from 'solid-js/store';
 import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice } from './types';
 import { hasDeviceProblem } from './types';
 import { onDeviceEvent, streamInitialDevices } from './tauri';
-import { CLASS_ICON_MAP } from './icons';
 import { loadClassIcons } from './icon-cache';
 
 // ── Configuration ─────────────────────────────────────────────────────────
@@ -33,6 +32,16 @@ const MAX_GHOSTS = 100;
 
 /** How often (ms) to sweep expired ghosts. */
 const GHOST_SWEEP_INTERVAL_MS = 2_000;
+
+/**
+ * Row density for the device list, ordered from loosest to tightest.
+ *
+ * The cycle button advances in this order and wraps around. `normal` is the
+ * original default and is what a user sees before they've touched the setting.
+ */
+export type DensityLevel = 'normal' | 'compact' | 'dense';
+
+const DENSITY_ORDER: readonly DensityLevel[] = ['normal', 'compact', 'dense'];
 
 // ── Store types ───────────────────────────────────────────────────────────
 
@@ -57,6 +66,8 @@ interface PersistedState {
   expandedCategories: Record<string, boolean>;
   /** Ghost retention in ms. 0 means "never expire". */
   ghostTimeoutMs: number;
+  /** Row density for the device list. Missing on old installs → defaults to 'normal'. */
+  density: DensityLevel;
 }
 
 function loadPersistedState(): Partial<PersistedState> {
@@ -78,8 +89,11 @@ const [searchQuery, setSearchQuery] = createSignal(_saved.searchQuery ?? '');
 const [showProblemsOnly, setShowProblemsOnly] = createSignal(_saved.showProblemsOnly ?? false);
 const [hiddenDeviceIds, setHiddenDeviceIds] = createSignal<Set<string>>(new Set(_saved.hiddenDeviceIds ?? []));
 const [hiddenClassGuids, setHiddenClassGuids] = createSignal<Set<string>>(new Set(_saved.hiddenClassGuids ?? []));
-const [ghostTimeoutMs, setGhostTimeoutMs] = createSignal<number>(
-  _saved.ghostTimeoutMs ?? DEFAULT_GHOST_TIMEOUT_MS,
+const [ghostTimeoutMs, setGhostTimeoutMs] = createSignal<number>(_saved.ghostTimeoutMs ?? DEFAULT_GHOST_TIMEOUT_MS);
+const [density, setDensity] = createSignal<DensityLevel>(
+  // Guard against garbage in localStorage — fall back to the default if someone
+  // hand-edited the value or we removed a level in a future version.
+  DENSITY_ORDER.includes(_saved.density as DensityLevel) ? (_saved.density as DensityLevel) : 'normal',
 );
 const [recentChanges, setRecentChanges] = createSignal<Set<string>>(new Set());
 /** Recent add/remove counts per class GUID, for category header pills. */
@@ -265,9 +279,7 @@ function sweepGhosts() {
   if (timeout === GHOST_TIMEOUT_INDEFINITE) return;
 
   const now = Date.now();
-  const expired = Object.entries(state.ghosts).filter(
-    ([_, g]) => now - g.removedAt >= timeout,
-  );
+  const expired = Object.entries(state.ghosts).filter(([_, g]) => now - g.removedAt >= timeout);
 
   if (expired.length > 0) {
     setState(
@@ -297,7 +309,7 @@ const categories = createMemo<DeviceCategory[]>(() => {
       cat = {
         classGuid: device.classGuid,
         className: device.className || 'Other devices',
-        iconId: CLASS_ICON_MAP[device.classGuid.toLowerCase()] ?? 'other',
+        iconId: device.iconId || 'other',
         devices: [],
         problemCount: 0,
         visible: true,
@@ -386,11 +398,8 @@ const counts = createMemo(() => {
 });
 
 /** Whether any filters are actively hiding content. */
-const hasActiveFilters = createMemo(() =>
-  searchQuery() !== '' ||
-  showProblemsOnly() ||
-  hiddenDeviceIds().size > 0 ||
-  hiddenClassGuids().size > 0,
+const hasActiveFilters = createMemo(
+  () => searchQuery() !== '' || showProblemsOnly() || hiddenDeviceIds().size > 0 || hiddenClassGuids().size > 0,
 );
 
 // ── Actions ───────────────────────────────────────────────────────────────
@@ -416,6 +425,14 @@ function collapseAllCategories() {
   });
 }
 
+/** Advance to the next density level in the cycle, wrapping around. */
+function cycleDensity() {
+  const current = density();
+  const idx = DENSITY_ORDER.indexOf(current);
+  const next = DENSITY_ORDER[(idx + 1) % DENSITY_ORDER.length];
+  setDensity(next);
+}
+
 function dismissGhost(instanceId: string) {
   setState(
     produce(s => {
@@ -426,6 +443,20 @@ function dismissGhost(instanceId: string) {
 
 function clearAllGhosts() {
   setState('ghosts', {});
+}
+
+/**
+ * Flash the "recent change" highlight on every currently-present device.
+ *
+ * Used as visible feedback after a manual "Scan for hardware changes". The
+ * backend's forced re-enumeration emits proper Added/Removed/Updated events
+ * for anything that actually changed, but when nothing changed the user would
+ * otherwise see no feedback at all — this pulse makes it obvious the scan ran.
+ */
+function pulseAllDevices() {
+  for (const id of Object.keys(state.devices)) {
+    markRecentChange(id);
+  }
 }
 
 function hideDevice(instanceId: string) {
@@ -499,6 +530,7 @@ function initDeviceStore() {
       hiddenClassGuids: [...hiddenClassGuids()],
       expandedCategories: { ...state.expandedCategories },
       ghostTimeoutMs: ghostTimeoutMs(),
+      density: density(),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
@@ -539,6 +571,7 @@ export {
   ghostTimeoutMs,
   setGhostTimeoutMs,
   GHOST_TIMEOUT_INDEFINITE,
+  density,
   hasActiveFilters,
   counts,
   recentChanges,
@@ -548,8 +581,10 @@ export {
   toggleCategory,
   expandAllCategories,
   collapseAllCategories,
+  cycleDensity,
   dismissGhost,
   clearAllGhosts,
+  pulseAllDevices,
   hideDevice,
   hideCategory,
   soloCategory,

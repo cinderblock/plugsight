@@ -5,7 +5,7 @@
  */
 
 import type { Component } from 'solid-js';
-import { Show } from 'solid-js';
+import { Show, createSignal } from 'solid-js';
 import {
   searchQuery,
   setSearchQuery,
@@ -18,8 +18,26 @@ import {
   ghostTimeoutMs,
   setGhostTimeoutMs,
   GHOST_TIMEOUT_INDEFINITE,
+  pulseAllDevices,
+  density,
+  cycleDensity,
+  type DensityLevel,
 } from '~/lib/device-store';
 import { scanForHardwareChanges } from '~/lib/tauri';
+
+/** Human-readable labels for each density level. */
+const DENSITY_LABELS: Record<DensityLevel, string> = {
+  normal: 'Normal',
+  compact: 'Compact',
+  dense: 'Dense',
+};
+
+/** Label of the level the cycle button will advance to next — shown in the tooltip. */
+const DENSITY_NEXT_LABEL: Record<DensityLevel, string> = {
+  normal: 'Compact',
+  compact: 'Dense',
+  dense: 'Normal',
+};
 
 /** Presets for the ghost timeout selector (ms). 0 = keep indefinitely. */
 const GHOST_TIMEOUT_PRESETS: ReadonlyArray<{ ms: number; label: string }> = [
@@ -34,11 +52,22 @@ const GHOST_TIMEOUT_PRESETS: ReadonlyArray<{ ms: number; label: string }> = [
 ];
 
 const Toolbar: Component = () => {
+  const [isScanning, setIsScanning] = createSignal(false);
+
   const handleScan = async () => {
+    // Guard against queuing multiple scans while one is in flight.
+    if (isScanning()) return;
+    setIsScanning(true);
     try {
+      // Backend re-emits Added/Removed/Updated for anything that actually
+      // changed. The pulse flashes every device row so the user sees the
+      // scan ran even when nothing changed.
       await scanForHardwareChanges();
+      pulseAllDevices();
     } catch (e) {
       console.error('Hardware scan failed:', e);
+    } finally {
+      setIsScanning(false);
     }
   };
 
@@ -97,11 +126,18 @@ const Toolbar: Component = () => {
           }
         />
 
+        <ToolbarButton
+          title={`Row density: ${DENSITY_LABELS[density()]} — click for ${DENSITY_NEXT_LABEL[density()]}`}
+          onClick={cycleDensity}
+          icon={<DensityIcon level={density()} />}
+        />
+
         <div class="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
 
         <ToolbarButton
-          title="Scan for hardware changes"
+          title={isScanning() ? 'Scanning…' : 'Scan for hardware changes'}
           onClick={handleScan}
+          loading={isScanning()}
           icon={
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="23 4 23 10 17 10" />
@@ -187,14 +223,49 @@ function formatTimeout(ms: number): string {
   return `${Math.round(ms / (60 * 60_000))}h`;
 }
 
-/** A small toolbar icon button. */
-const ToolbarButton: Component<{ title: string; onClick: () => void; icon: any }> = props => (
+/**
+ * Three horizontal lines whose spacing shrinks with the density level —
+ * a visual cue for the current setting that updates the moment you click.
+ */
+const DensityIcon: Component<{ level: DensityLevel }> = props => {
+  // Lines are centered around y=12 in a 24-unit viewBox. Tighter levels pull
+  // the outer lines toward the middle.
+  const offsets: Record<DensityLevel, number> = {
+    normal: 7,
+    compact: 4,
+    dense: 2,
+  };
+  const offset = () => offsets[props.level];
+  return (
+    <svg
+      class="w-4 h-4 transition-[stroke-width] duration-150"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+    >
+      <line x1="4" x2="20" y1={12 - offset()} y2={12 - offset()} />
+      <line x1="4" x2="20" y1="12" y2="12" />
+      <line x1="4" x2="20" y1={12 + offset()} y2={12 + offset()} />
+    </svg>
+  );
+};
+
+/** A small toolbar icon button. Pass `loading` to spin the icon and disable the button. */
+const ToolbarButton: Component<{
+  title: string;
+  onClick: () => void;
+  icon: any;
+  loading?: boolean;
+}> = props => (
   <button
-    class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+    class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
     title={props.title}
     onClick={props.onClick}
+    disabled={props.loading}
   >
-    {props.icon}
+    <div classList={{ 'animate-spin': !!props.loading }}>{props.icon}</div>
   </button>
 );
 

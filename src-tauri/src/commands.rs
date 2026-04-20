@@ -73,10 +73,18 @@ pub fn open_device_properties(instance_id: String) -> Result<(), String> {
 }
 
 /// Trigger a hardware scan (equivalent to "Scan for hardware changes" in the Windows Device Manager).
+///
+/// Two things happen:
+/// 1. `CM_Reenumerate_DevNode` kicks the Windows PnP manager to re-scan the
+///    hardware tree. Any devices that have appeared, disappeared, or changed
+///    state will eventually be picked up by the DeviceWatcher.
+/// 2. We also force an immediate re-enumeration + diff via the watcher's
+///    shared state, bypassing the debounce window. This way the user-visible
+///    scan responds right away rather than waiting up to 300ms for the next
+///    watcher event. Any real changes surface as normal Added/Removed/Updated
+///    events, which means ghost handling on the frontend continues to work.
 #[tauri::command]
-pub fn scan_for_hardware_changes() -> Result<(), String> {
-    // This uses CM_Reenumerate_DevNode on the root device node.
-    // The DeviceWatcher will pick up any changes automatically.
+pub fn scan_for_hardware_changes(app: tauri::AppHandle) -> Result<(), String> {
     unsafe {
         use windows::Win32::Devices::DeviceAndDriverInstallation::*;
 
@@ -91,6 +99,9 @@ pub fn scan_for_hardware_changes() -> Result<(), String> {
             return Err(format!("CM_Reenumerate_DevNode failed: {result:?}"));
         }
     }
+
+    // Bypass the watcher's debounce so any changes surface immediately.
+    crate::device::watcher::force_reenumerate_and_diff(&app)?;
 
     log::info!("Hardware scan triggered");
     Ok(())

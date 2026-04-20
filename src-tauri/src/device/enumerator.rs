@@ -6,6 +6,7 @@
 use windows::Win32::Devices::DeviceAndDriverInstallation::*;
 use windows::core::PCWSTR;
 
+use super::class_meta;
 use super::properties;
 use super::types::DeviceInfo;
 
@@ -17,12 +18,8 @@ pub fn enumerate_all_devices() -> Vec<DeviceInfo> {
     let mut devices = Vec::new();
 
     unsafe {
-        let dev_info_set = SetupDiGetClassDevsW(
-            None,
-            PCWSTR::null(),
-            None,
-            DIGCF_ALLCLASSES | DIGCF_PRESENT,
-        );
+        let dev_info_set =
+            SetupDiGetClassDevsW(None, PCWSTR::null(), None, DIGCF_ALLCLASSES | DIGCF_PRESENT);
 
         let dev_info_set = match dev_info_set {
             Ok(h) => h,
@@ -66,7 +63,10 @@ pub fn enumerate_all_devices() -> Vec<DeviceInfo> {
 /// the ID as the "Enumerator" parameter to `SetupDiGetClassDevsW`, which expects
 /// enumerator names like "USB" or "PCI").
 pub fn get_device_by_instance_id(instance_id: &str) -> Option<DeviceInfo> {
-    let wide_id: Vec<u16> = instance_id.encode_utf16().chain(std::iter::once(0)).collect();
+    let wide_id: Vec<u16> = instance_id
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
 
     unsafe {
         // Create an empty device info set (not filtered by class).
@@ -112,20 +112,25 @@ fn build_device_info(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> Option<D
     let friendly_name = properties::get_friendly_name(dev_info, dev_data);
     let name = friendly_name.unwrap_or_else(|| description.clone());
     let manufacturer = properties::get_manufacturer(dev_info, dev_data);
-    let class_name = properties::get_class_name(dev_info, dev_data);
+    let class_name_hint = properties::get_class_name(dev_info, dev_data);
     let class_guid = properties::get_class_guid(dev_info, dev_data);
     let driver_version = properties::get_driver_version(dev_info, dev_data);
     let hardware_ids = properties::get_hardware_ids(dev_info, dev_data);
     let parent_id = properties::get_parent_id(dev_info, dev_data);
     let (status, problem_code) = properties::derive_device_status(dev_info, dev_data);
 
+    // Resolve the canonical class name + icon ID from our known-class table,
+    // falling back to the SetupAPI-provided name for unknown GUIDs.
+    let meta = class_meta::lookup_class(&class_guid, &class_name_hint);
+
     Some(DeviceInfo {
         instance_id,
         name,
         description,
         manufacturer,
-        class_name,
+        class_name: meta.name,
         class_guid,
+        icon_id: meta.icon_id,
         driver_version,
         status,
         problem_code,

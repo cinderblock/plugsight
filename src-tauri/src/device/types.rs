@@ -15,10 +15,16 @@ pub struct DeviceInfo {
     pub description: String,
     /// Manufacturer string.
     pub manufacturer: String,
-    /// Setup class display name (e.g. "Display adapters").
+    /// Setup class display name (e.g. "Display adapters"). Resolved via
+    /// `class_meta::lookup_class` from the GUID, with the SetupAPI class name
+    /// used as a fallback when the GUID isn't in our known table.
     pub class_name: String,
     /// Setup class GUID as a string (e.g. "{4d36e968-e325-11ce-bfc1-08002be10318}").
     pub class_guid: String,
+    /// Semantic icon identifier (e.g. "display", "network") that the frontend
+    /// maps to its SVG icon set. Resolved via `class_meta::lookup_class`;
+    /// falls back to "other" for unknown class GUIDs.
+    pub icon_id: String,
     /// Driver version string, if available.
     pub driver_version: String,
     /// Current device status.
@@ -40,15 +46,9 @@ pub enum DeviceStatus {
     /// Device is working properly.
     Ok,
     /// Device has a warning (non-fatal problem).
-    Warning {
-        code: u32,
-        message: String,
-    },
+    Warning { code: u32, message: String },
     /// Device has an error (not functioning).
-    Error {
-        code: u32,
-        message: String,
-    },
+    Error { code: u32, message: String },
     /// Device has been disabled by the user.
     Disabled,
     /// No driver is installed for this device.

@@ -256,9 +256,17 @@ pub fn get_guid_property(
         let _guid = GUID::from_values(data1, data2, data3, data4);
         Some(format!(
             "{{{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}}}",
-            data1, data2, data3,
-            data4[0], data4[1], data4[2], data4[3],
-            data4[4], data4[5], data4[6], data4[7],
+            data1,
+            data2,
+            data3,
+            data4[0],
+            data4[1],
+            data4[2],
+            data4[3],
+            data4[4],
+            data4[5],
+            data4[6],
+            data4[7],
         ))
     }
 }
@@ -291,13 +299,11 @@ pub fn get_class_guid(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> String 
 }
 
 pub fn get_driver_version(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> String {
-    get_string_property(dev_info, dev_data, &DEVPKEY_DEVICE_DRIVER_VERSION)
-        .unwrap_or_default()
+    get_string_property(dev_info, dev_data, &DEVPKEY_DEVICE_DRIVER_VERSION).unwrap_or_default()
 }
 
 pub fn get_instance_id(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> String {
-    get_string_property(dev_info, dev_data, &DEVPKEY_DEVICE_INSTANCE_ID)
-        .unwrap_or_default()
+    get_string_property(dev_info, dev_data, &DEVPKEY_DEVICE_INSTANCE_ID).unwrap_or_default()
 }
 
 pub fn get_hardware_ids(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> Vec<String> {
@@ -305,8 +311,7 @@ pub fn get_hardware_ids(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> Vec<S
 }
 
 pub fn get_parent_id(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> String {
-    get_string_property(dev_info, dev_data, &DEVPKEY_DEVICE_PARENT)
-        .unwrap_or_default()
+    get_string_property(dev_info, dev_data, &DEVPKEY_DEVICE_PARENT).unwrap_or_default()
 }
 
 pub fn get_problem_code(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> u32 {
@@ -318,10 +323,7 @@ pub fn get_devnode_status(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> u32
 }
 
 /// Derive a high-level DeviceStatus from the devnode status flags and problem code.
-pub fn derive_device_status(
-    dev_info: HDEVINFO,
-    dev_data: &SP_DEVINFO_DATA,
-) -> (DeviceStatus, u32) {
+pub fn derive_device_status(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> (DeviceStatus, u32) {
     let status_flags = get_devnode_status(dev_info, dev_data);
     let problem_code = get_problem_code(dev_info, dev_data);
 
@@ -372,7 +374,9 @@ fn problem_code_to_message(code: u32) -> String {
         32 => "A driver for this device was not required and has been disabled.".into(),
         33 => "Windows cannot determine which resources are required.".into(),
         34 => "Windows cannot determine the settings for this device.".into(),
-        35 => "The system firmware does not have enough information to configure this device.".into(),
+        35 => {
+            "The system firmware does not have enough information to configure this device.".into()
+        }
         36 => "This device is requesting a PCI interrupt.".into(),
         37 => "Windows cannot initialize the device driver.".into(),
         38 => "Windows cannot load the device driver (already loaded in memory).".into(),

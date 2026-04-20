@@ -8,15 +8,13 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use base64::Engine as _;
-use windows::core::GUID;
 use windows::Win32::Devices::DeviceAndDriverInstallation::SetupDiLoadClassIcon;
 use windows::Win32::Graphics::Gdi::{
-    CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, SelectObject,
-    BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
+    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, CreateDIBSection, DIB_RGB_COLORS,
+    DeleteDC, DeleteObject, SelectObject,
 };
-use windows::Win32::UI::WindowsAndMessaging::{
-    DestroyIcon, DrawIconEx, HICON, DI_NORMAL,
-};
+use windows::Win32::UI::WindowsAndMessaging::{DI_NORMAL, DestroyIcon, DrawIconEx, HICON};
+use windows::core::GUID;
 
 /// Thread-safe cache: class GUID string → base64 data URL.
 static ICON_CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
@@ -71,7 +69,8 @@ fn parse_guid(s: &str) -> Result<GUID, String> {
     }
     for (i, chunk) in hex34.as_bytes().chunks(2).enumerate() {
         let byte_str = std::str::from_utf8(chunk).map_err(|e| format!("GUID parse error: {e}"))?;
-        data4[i] = u8::from_str_radix(byte_str, 16).map_err(|e| format!("GUID parse error: {e}"))?;
+        data4[i] =
+            u8::from_str_radix(byte_str, 16).map_err(|e| format!("GUID parse error: {e}"))?;
     }
 
     Ok(GUID {
@@ -141,17 +140,7 @@ fn hicon_to_png_data_url(hicon: HICON) -> Result<String, String> {
         let old_bmp = SelectObject(hdc, hbmp);
 
         // Draw the icon onto the DIB section.
-        DrawIconEx(
-            hdc,
-            0,
-            0,
-            hicon,
-            SIZE,
-            SIZE,
-            0,
-            None,
-            DI_NORMAL,
-        ).map_err(|e| {
+        DrawIconEx(hdc, 0, 0, hicon, SIZE, SIZE, 0, None, DI_NORMAL).map_err(|e| {
             SelectObject(hdc, old_bmp);
             let _ = DeleteObject(hbmp);
             let _ = DeleteDC(hdc);

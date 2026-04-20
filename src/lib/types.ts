@@ -4,8 +4,11 @@ export interface DeviceInfo {
   name: string;
   description: string;
   manufacturer: string;
+  /** Canonical class name (resolved from the class GUID on the backend). */
   className: string;
   classGuid: string;
+  /** Semantic icon ID for the frontend's SVG icon set (resolved on the backend). */
+  iconId: string;
   driverVersion: string;
   status: DeviceStatus;
   problemCode: number;

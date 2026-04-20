@@ -12,7 +12,6 @@ import { openDeviceProperties } from '~/lib/tauri';
 import { statusLabel, hasDeviceProblem } from '~/lib/types';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
-import { CLASS_ICON_MAP } from '~/lib/icons';
 
 const DeviceDetail: Component = () => {
   const sel = selectedDevice;
@@ -34,7 +33,7 @@ const DeviceDetail: Component = () => {
       {sel => {
         const device = () => sel().device;
         const isGhost = () => sel().isGhost;
-        const iconId = () => CLASS_ICON_MAP[device().classGuid.toLowerCase()] ?? 'other';
+        const iconId = () => device().iconId || 'other';
 
         return (
           <div class={`h-full overflow-y-auto p-4 ${isGhost() ? 'opacity-60' : ''}`}>

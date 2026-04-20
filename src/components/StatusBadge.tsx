@@ -21,6 +21,7 @@ const StatusBadge: Component<StatusBadgeProps> = props => {
     <Switch>
       <Match when={props.status.kind === 'ok'}>
         {/* No badge for healthy devices — clean UI. */}
+        <></>
       </Match>
 
       <Match when={props.status.kind === 'error'}>

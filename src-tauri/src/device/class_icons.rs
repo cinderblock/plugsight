@@ -114,7 +114,7 @@ fn hicon_to_png_data_url(hicon: HICON) -> Result<String, String> {
         }
 
         // Create a 32bpp DIB section.
-        let mut bmi = BITMAPINFO {
+        let bmi = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
                 biWidth: SIZE,
@@ -128,7 +128,7 @@ fn hicon_to_png_data_url(hicon: HICON) -> Result<String, String> {
         };
 
         let mut bits_ptr: *mut std::ffi::c_void = std::ptr::null_mut();
-        let hbmp = CreateDIBSection(hdc, &mut bmi, DIB_RGB_COLORS, &mut bits_ptr, None, 0)
+        let hbmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &mut bits_ptr, None, 0)
             .map_err(|e| format!("CreateDIBSection failed: {e}"))?;
 
         if bits_ptr.is_null() {

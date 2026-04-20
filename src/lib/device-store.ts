@@ -488,7 +488,7 @@ function soloCategory(classGuid: string) {
   allGuids.delete(classGuid);
   setHiddenClassGuids(allGuids);
   // Clear device-level hides so devices within the solo'd category aren't hidden.
-  setHiddenDeviceIds(new Set());
+  setHiddenDeviceIds(new Set<string>());
   // Auto-expand the solo'd category.
   setState('expandedCategories', classGuid, true);
 }
@@ -497,8 +497,8 @@ function clearAllFilters() {
   batch(() => {
     setSearchQuery('');
     setShowProblemsOnly(false);
-    setHiddenDeviceIds(new Set());
-    setHiddenClassGuids(new Set());
+    setHiddenDeviceIds(new Set<string>());
+    setHiddenClassGuids(new Set<string>());
   });
 }
 

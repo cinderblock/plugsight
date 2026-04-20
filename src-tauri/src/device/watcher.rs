@@ -344,13 +344,13 @@ fn do_reenumerate_and_diff(app: &AppHandle, shared: &SharedState) {
 
     // Find updated devices (in both, but properties changed).
     for (id, new_device) in &new_map {
-        if let Some(old_device) = state.known.get(id) {
-            if device_changed(old_device, new_device) {
-                let event = DeviceEvent::Updated {
-                    device: new_device.clone(),
-                };
-                let _ = app.emit(DEVICE_EVENT, &event);
-            }
+        if let Some(old_device) = state.known.get(id)
+            && device_changed(old_device, new_device)
+        {
+            let event = DeviceEvent::Updated {
+                device: new_device.clone(),
+            };
+            let _ = app.emit(DEVICE_EVENT, &event);
         }
     }
 

@@ -113,6 +113,23 @@ The **Release** workflow (`release.yml`) is triggered by the tag push and:
 
 The corresponding public key is committed in `src-tauri/keys/updater.key.pub` and referenced in `tauri.conf.json`.
 
+### Code Signing Status
+
+**Published installers are currently unsigned** (no Windows Authenticode signature). On first download, users will see:
+
+- A SmartScreen warning (*"Windows protected your PC — Unknown publisher"*) that requires clicking **More info → Run anyway**.
+- A yellow-banner UAC dialog instead of a blue-banner "verified publisher" dialog when the MSI or system-wide NSIS installer is launched.
+
+Updater bundles *are* signed with the Tauri minisign key above, so in-app auto-updates are integrity-verified even while code signing is pending — but that signature is for the updater client, not for Windows.
+
+An EV code-signing certificate (DigiCert KeyLocker) is being provisioned. When it lands:
+
+1. Add the DigiCert secrets (`SM_HOST`, `SM_API_KEY`, `SM_CLIENT_CERT_FILE_B64`, `SM_CLIENT_CERT_PASSWORD`, `SM_CODE_SIGNING_CERT_SHA1_HASH`, `SM_KEYPAIR_ALIAS`) to the repo.
+2. Uncomment the KeyLocker setup steps in `.github/workflows/release.yml`.
+3. Add a `bundle.windows.signCommand` entry to `src-tauri/tauri.conf.json` (see the workflow comments for the exact invocation).
+
+EV certs earn instant SmartScreen reputation, so the "Unknown publisher" warning will disappear from the first signed release — no reputation warm-up required.
+
 ## Architecture
 
 ```

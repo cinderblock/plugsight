@@ -44,13 +44,68 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
 
+      # ─── Windows Authenticode code signing (DigiCert KeyLocker) ─────────────
+      # Scaffold — uncomment once the EV cert is provisioned in DigiCert ONE /
+      # Software Trust Manager (KeyLocker). Until then, installers ship
+      # unsigned and users will see SmartScreen "Unknown publisher" warnings.
+      #
+      # Docs:
+      #   https://docs.digicert.com/en/digicert-keylocker/ci-cd-integrations/github-custom-action-for-keypair-signing.html
+      #   https://v2.tauri.app/distribute/sign/windows/
+      #
+      # Required GitHub secrets:
+      #   SM_HOST                        — e.g. https://clientauth.one.digicert.com
+      #   SM_API_KEY                     — DigiCert KeyLocker API key
+      #   SM_CLIENT_CERT_FILE_B64        — base64-encoded PKCS#12 client auth cert
+      #   SM_CLIENT_CERT_PASSWORD        — password for the PKCS#12 above
+      #   SM_CODE_SIGNING_CERT_SHA1_HASH — SHA-1 fingerprint of the EV code-signing cert
+      #   SM_KEYPAIR_ALIAS               — keypair alias in KeyLocker (for `smctl sign`)
+      #
+      # Also required in src-tauri/tauri.conf.json — add one of these to
+      # bundle.windows so Tauri signs every bundled EXE/MSI/NSIS:
+      #
+      #   Option A (signtool + KeyLocker KSP, the Tauri-recommended route):
+      #     "signCommand": "signtool sign /sha1 ${SM_CODE_SIGNING_CERT_SHA1_HASH} /tr http://timestamp.digicert.com /td sha256 /fd sha256 %1"
+      #
+      #   Option B (DigiCert's own smctl wrapper):
+      #     "signCommand": "smctl sign --keypair-alias ${SM_KEYPAIR_ALIAS} --input %1"
+      #
+      # Tauri substitutes %1 with the path of each bundled artifact.
+      #
+      # - name: Decode KeyLocker client auth cert
+      #   shell: bash
+      #   run: |
+      #     echo "${{ secrets.SM_CLIENT_CERT_FILE_B64 }}" | base64 --decode > /d/Certificate_pkcs12.p12
+      #     echo "SM_CLIENT_CERT_FILE=D:\\Certificate_pkcs12.p12" >> "$GITHUB_ENV"
+      #
+      # - name: Install DigiCert KeyLocker client tools (smctl + signtool KSP)
+      #   uses: digicert/ssm-code-signing@v1.0.0
+      #
+      # - name: Sync signing cert to local Windows cert store
+      #   env:
+      #     SM_HOST: ${{ secrets.SM_HOST }}
+      #     SM_API_KEY: ${{ secrets.SM_API_KEY }}
+      #     SM_CLIENT_CERT_FILE: ${{ env.SM_CLIENT_CERT_FILE }}
+      #     SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+      #   run: smctl windows certsync
+
       # Build NSIS + MSI bundles with updater signing.
       # TAURI_SIGNING_PRIVATE_KEY is required for the updater to generate
-      # signed bundles and a latest.json manifest.
+      # signed bundles and a latest.json manifest. (This is minisign-based
+      # *updater* signing — unrelated to Windows Authenticode code signing
+      # above.)
       - name: Build Tauri app (NSIS + MSI)
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # When code signing is enabled above, add these so the signCommand
+          # in tauri.conf.json can authenticate to KeyLocker:
+          # SM_HOST: ${{ secrets.SM_HOST }}
+          # SM_API_KEY: ${{ secrets.SM_API_KEY }}
+          # SM_CLIENT_CERT_FILE: ${{ env.SM_CLIENT_CERT_FILE }}
+          # SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+          # SM_CODE_SIGNING_CERT_SHA1_HASH: ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }}
+          # SM_KEYPAIR_ALIAS: ${{ secrets.SM_KEYPAIR_ALIAS }}
         run: cargo tauri build
 
       # Collect all release artifacts with version-free filenames via the

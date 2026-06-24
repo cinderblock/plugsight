@@ -24,7 +24,7 @@ import { open } from '@tauri-apps/plugin-shell';
 
 /** GitHub owner/repo for release checking (fallback path). */
 const GITHUB_OWNER = 'cinderblock';
-const GITHUB_REPO = 'device-manager';
+const GITHUB_REPO = 'plugsight';
 
 /** How often to check for updates (ms). Default: 30 minutes. */
 const CHECK_INTERVAL_MS = 30 * 60 * 1000;

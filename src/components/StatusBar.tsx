@@ -26,7 +26,7 @@ const StatusBar: Component = () => {
       {/* Left: app name + version */}
       <div class="flex items-center gap-2">
         <span class="text-xs text-gray-400 dark:text-gray-500">
-          Device Manager++
+          PlugSight
           <Show when={currentVersion()}>
             <span class="ml-1 tabular-nums">v{currentVersion()}</span>
           </Show>

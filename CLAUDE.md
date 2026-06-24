@@ -1,4 +1,6 @@
-# Device Manager++ — Development Guide
+# PlugSight — Development Guide
+
+> Formerly "Device Manager++" (now the tagline). Published as **PlugSight**.
 
 ## Architecture
 

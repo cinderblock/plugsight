@@ -19,7 +19,7 @@ import { loadClassIcons } from './icon-cache';
 // ── Configuration ─────────────────────────────────────────────────────────
 
 /** localStorage key for persisted filter/UI state. */
-const STORAGE_KEY = 'device-manager-pp:ui-state';
+const STORAGE_KEY = 'plugsight:ui-state';
 
 /** Default duration (ms) a removed device stays visible as a ghost. */
 const DEFAULT_GHOST_TIMEOUT_MS = 30_000;

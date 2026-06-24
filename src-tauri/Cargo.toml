@@ -1,10 +1,10 @@
 [package]
-name = "device-manager-pp"
+name = "plugsight"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "device_manager_pp_lib"
+name = "plugsight_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

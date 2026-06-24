@@ -626,25 +626,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "device-manager-pp"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "env_logger",
- "log",
- "png",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-process",
- "tauri-plugin-shell",
- "tauri-plugin-updater",
- "tokio",
- "windows 0.58.0",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2638,6 +2619,25 @@ dependencies = [
  "quick-xml",
  "serde",
  "time",
+]
+
+[[package]]
+name = "plugsight"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "env_logger",
+ "log",
+ "png",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-process",
+ "tauri-plugin-shell",
+ "tauri-plugin-updater",
+ "tokio",
+ "windows 0.58.0",
 ]
 
 [[package]]

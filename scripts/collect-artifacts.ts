@@ -4,18 +4,18 @@
  * into a single directory with version-free, human-readable filenames.
  *
  * Tauri names its output files with the version number embedded
- * (e.g. "Device Manager++_0.1.0_x64-setup.exe"). For distribution we prefer
+ * (e.g. "PlugSight_0.1.0_x64-setup.exe"). For distribution we prefer
  * stable filenames that don't change between releases, so download links and
  * documentation stay valid across versions. The version is still encoded in
  * the updater manifest (`latest.json`) and the GitHub release tag.
  *
  * Produces (default output dir: ./release-artifacts):
  *
- *   Device Manager++ Setup.exe      — NSIS installer (per-user, no admin)
- *   Device Manager++ Setup.exe.sig  — updater signature for NSIS installer
- *   Device Manager++.msi            — MSI installer (enterprise/GPO)
- *   Device Manager++.msi.sig        — updater signature for MSI installer
- *   Device Manager++ Portable.zip   — portable binary (zipped for distribution)
+ *   PlugSight Setup.exe      — NSIS installer (per-user, no admin)
+ *   PlugSight Setup.exe.sig  — updater signature for NSIS installer
+ *   PlugSight.msi            — MSI installer (enterprise/GPO)
+ *   PlugSight.msi.sig        — updater signature for MSI installer
+ *   PlugSight Portable.zip   — portable binary (zipped for distribution)
  *   latest.json                     — updater manifest
  *
  * Usage:
@@ -42,10 +42,10 @@ const BUNDLE = join(TARGET_RELEASE, 'bundle');
 const OUT = resolve(ROOT, process.argv[2] ?? 'release-artifacts');
 
 /** Base filename used for all renamed artifacts. Matches productName in tauri.conf.json. */
-const PRODUCT = 'Device Manager++';
+const PRODUCT = 'PlugSight';
 
 /** Raw Rust binary name from Cargo.toml [package].name. */
-const RAW_BINARY = 'device-manager-pp.exe';
+const RAW_BINARY = 'plugsight.exe';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ if (msiFile) copies.push({ src: msiFile, dest: join(OUT, `${PRODUCT}.msi`) });
 if (msiSig) copies.push({ src: msiSig, dest: join(OUT, `${PRODUCT}.msi.sig`) });
 
 // Portable EXE — zipped for distribution. The raw binary is renamed to the
-// product name inside the archive so users see "Device Manager++.exe" when
+// product name inside the archive so users see "PlugSight.exe" when
 // they extract it.
 let portableSrc: string | null = null;
 const portable = join(TARGET_RELEASE, RAW_BINARY);

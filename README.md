@@ -1,10 +1,12 @@
-# Device Manager++
+# PlugSight
+
+**Device Manager++ for Windows** — see your devices the moment they connect.
 
 A modern replacement for the Windows Device Manager, built with [Tauri v2](https://v2.tauri.app/) (Rust + SolidJS).
 
 ## Why?
 
-The official Windows Device Manager has a fundamental UX problem: **every change refreshes the entire device tree**. You can never watch the list grow. You can never see what just disappeared. Tiny 8-pixel error overlay icons are nearly invisible. Device Manager++ fixes all of that.
+The official Windows Device Manager has a fundamental UX problem: **every change refreshes the entire device tree**. You can never watch the list grow. You can never see what just disappeared. Tiny 8-pixel error overlay icons are nearly invisible. PlugSight fixes all of that.
 
 ## Key Features
 

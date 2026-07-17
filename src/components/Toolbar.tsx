@@ -26,6 +26,9 @@ import {
   toggleGroupIdentical,
   viewMode,
   toggleViewMode,
+  linkMode,
+  cycleLinkMode,
+  type LinkMode,
 } from '~/lib/device-store';
 import { scanForHardwareChanges } from '~/lib/tauri';
 
@@ -41,6 +44,13 @@ const DENSITY_NEXT_LABEL: Record<DensityLevel, string> = {
   normal: 'Compact',
   compact: 'Dense',
   dense: 'Normal',
+};
+
+/** Human-readable labels for each relation-arrow mode. */
+const LINK_MODE_LABELS: Record<LinkMode, string> = {
+  all: 'shown for selected and hovered devices',
+  selected: 'shown for the selected device only',
+  none: 'hidden',
 };
 
 /** Presets for the ghost timeout selector (ms). 0 = keep indefinitely. */
@@ -112,7 +122,7 @@ const Toolbar: Component = () => {
       {/* Action buttons */}
       <div class="flex items-center gap-1">
         <ToolbarButton
-          title="Expand all"
+          label="Expand all"
           onClick={expandAllCategories}
           icon={
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -121,7 +131,7 @@ const Toolbar: Component = () => {
           }
         />
         <ToolbarButton
-          title="Collapse all"
+          label="Collapse all"
           onClick={collapseAllCategories}
           icon={
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -131,13 +141,13 @@ const Toolbar: Component = () => {
         />
 
         <ToolbarButton
-          title={`Row density: ${DENSITY_LABELS[density()]} — click for ${DENSITY_NEXT_LABEL[density()]}`}
+          label={`Row density: ${DENSITY_LABELS[density()]} — click for ${DENSITY_NEXT_LABEL[density()]}`}
           onClick={cycleDensity}
           icon={<DensityIcon level={density()} />}
         />
 
         <ToolbarButton
-          title={`Group identical devices: ${groupIdentical() ? 'On' : 'Off'}`}
+          label={`Group identical devices: ${groupIdentical() ? 'on' : 'off'}`}
           active={groupIdentical()}
           onClick={toggleGroupIdentical}
           icon={
@@ -149,7 +159,7 @@ const Toolbar: Component = () => {
         />
 
         <ToolbarButton
-          title={
+          label={
             viewMode() === 'connections'
               ? 'View: Connections (USB/PCI tree) — click for Categories'
               : 'View: Categories — click for Connections (USB/PCI tree)'
@@ -166,10 +176,16 @@ const Toolbar: Component = () => {
           }
         />
 
+        <ToolbarButton
+          label={`Parent/child link arrows: ${LINK_MODE_LABELS[linkMode()]}`}
+          onClick={cycleLinkMode}
+          icon={<LinkModeIcon mode={linkMode()} />}
+        />
+
         <div class="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
 
         <ToolbarButton
-          title={isScanning() ? 'Scanning…' : 'Scan for hardware changes'}
+          label={isScanning() ? 'Scanning…' : 'Scan for hardware changes'}
           onClick={handleScan}
           loading={isScanning()}
           icon={
@@ -184,7 +200,7 @@ const Toolbar: Component = () => {
           <div class="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
           <button
             class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50 transition-colors cursor-pointer"
-            title="Clear all filters (search, hidden items, problems only)"
+            aria-label="Clear all filters (search, hidden items, problems only)"
             onClick={clearAllFilters}
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -198,7 +214,7 @@ const Toolbar: Component = () => {
         <Show when={counts().ghosts > 0}>
           <div class="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
           <ToolbarButton
-            title="Clear all removed device history"
+            label="Clear all removed device history"
             onClick={clearAllGhosts}
             icon={
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -215,7 +231,7 @@ const Toolbar: Component = () => {
         {/* Clock icon — click to clear all ghost devices */}
         <button
           class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
-          title="Clear all removed devices"
+          aria-label="Clear all removed devices"
           onClick={clearAllGhosts}
         >
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -223,15 +239,10 @@ const Toolbar: Component = () => {
             <polyline points="12 6 12 12 16 14" />
           </svg>
         </button>
-        <label
-          title={
-            ghostTimeoutMs() === GHOST_TIMEOUT_INDEFINITE
-              ? 'Removed devices are kept indefinitely'
-              : `Removed devices disappear after ${formatTimeout(ghostTimeoutMs())}`
-          }
-        >
+        <label>
           <select
             value={ghostTimeoutMs()}
+            aria-label="How long removed devices stay visible"
             onChange={e => setGhostTimeoutMs(Number(e.currentTarget.value))}
             class="text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors cursor-pointer tabular-nums"
           >
@@ -286,9 +297,41 @@ const DensityIcon: Component<{ level: DensityLevel }> = props => {
   );
 };
 
+/**
+ * Miniature of the relation-arrow overlay: three device rows with elbow
+ * connectors through the side gutters (parent up the left, child down the
+ * right). `selected` fills the middle row — links only for the selected
+ * device; `none` drops the connectors and strikes the icon through.
+ */
+const LinkModeIcon: Component<{ mode: LinkMode }> = props => (
+  <svg
+    class="w-4 h-4"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <line x1="9" x2="15" y1="5" y2="5" />
+    <Show when={props.mode === 'selected'} fallback={<line x1="9" x2="15" y1="12" y2="12" />}>
+      <rect x="8" y="9.5" width="8" height="5" rx="1.5" fill="currentColor" stroke="none" />
+    </Show>
+    <line x1="9" x2="15" y1="19" y2="19" />
+    <Show when={props.mode !== 'none'}>
+      <path d="M9 12 H5 V5 H9" />
+      <path d="M15 12 h4 v7 h-4" />
+    </Show>
+    <Show when={props.mode === 'none'}>
+      <line x1="4" y1="4" x2="20" y2="20" />
+    </Show>
+  </svg>
+);
+
 /** A small toolbar icon button. Pass `loading` to spin the icon and disable the button. */
 const ToolbarButton: Component<{
-  title: string;
+  /** Accessible name (screen readers only — no tooltips; the icon carries the meaning). */
+  label: string;
   onClick: () => void;
   icon: any;
   loading?: boolean;
@@ -303,7 +346,7 @@ const ToolbarButton: Component<{
       'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200':
         !props.active,
     }}
-    title={props.title}
+    aria-label={props.label}
     onClick={props.onClick}
     disabled={props.loading}
   >

@@ -20,7 +20,9 @@
  * Two sets can show at once: the **selected** device's relationships are always
  * shown (vivid), and while hovering a *different* device its relationships are
  * also shown (desaturated), with the vertical buses offset so they don't
- * overlap. With nothing selected, the hovered set is shown vivid.
+ * overlap. With nothing selected, the hovered set is shown vivid. The toolbar's
+ * link-mode toggle narrows this: `selected` suppresses the hover set, `none`
+ * draws nothing.
  *
  * Overlay is absolutely positioned inside the scroll container (scrolls with the
  * content) and purely decorative (`pointer-events: none`). Rows are located by
@@ -33,7 +35,7 @@
 
 import type { Component } from 'solid-js';
 import { For, createSignal, createEffect, onCleanup, onMount } from 'solid-js';
-import { relationIndex, selectedId, hoveredId } from '~/lib/device-store';
+import { relationIndex, selectedId, hoveredId, linkMode } from '~/lib/device-store';
 
 type ColorKey = 'parent-v' | 'parent-m' | 'child-v' | 'child-m';
 
@@ -97,9 +99,12 @@ const RelationArrows: Component<{ container: () => HTMLElement | undefined }> = 
 
   const recompute = () => {
     const container = props.container();
+    const mode = linkMode();
     const sel = selectedId();
-    const hov = hoveredId();
-    if (!container || (!sel && !hov)) {
+    // In 'selected' mode the hover set is suppressed entirely; in 'none' mode
+    // nothing is drawn at all.
+    const hov = mode === 'all' ? hoveredId() : null;
+    if (!container || mode === 'none' || (!sel && !hov)) {
       setSegments([]);
       return;
     }
@@ -296,6 +301,7 @@ const RelationArrows: Component<{ container: () => HTMLElement | undefined }> = 
     selectedId();
     hoveredId();
     relationIndex();
+    linkMode();
     recompute();
   });
 

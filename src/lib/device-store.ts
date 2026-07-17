@@ -48,6 +48,16 @@ const DENSITY_ORDER: readonly DensityLevel[] = ['normal', 'compact', 'dense'];
 export type ViewMode = 'categories' | 'connections';
 
 /**
+ * Parent/child relation-arrow visibility, cycled by a toolbar button:
+ * - `all`: selected device's links, plus a second set while hovering another device
+ * - `selected`: only the selected device's links (hover draws nothing)
+ * - `none`: no relation arrows at all
+ */
+export type LinkMode = 'all' | 'selected' | 'none';
+
+const LINK_MODE_ORDER: readonly LinkMode[] = ['all', 'selected', 'none'];
+
+/**
  * Class GUID of "USB controllers" (braced lowercase, as the backend formats
  * GUIDs). The physical-nesting mode is offered only on this category.
  */
@@ -84,6 +94,8 @@ interface PersistedState {
   viewMode: ViewMode;
   /** Whether the USB controllers category nests devices by physical hub/controller. */
   usbNesting: boolean;
+  /** Which parent/child relation arrows are drawn. */
+  linkMode: LinkMode;
 }
 
 function loadPersistedState(): Partial<PersistedState> {
@@ -113,6 +125,10 @@ const [density, setDensity] = createSignal<DensityLevel>(
 );
 const [groupIdentical, setGroupIdentical] = createSignal<boolean>(_saved.groupIdentical ?? true);
 const [usbNesting, setUsbNesting] = createSignal<boolean>(_saved.usbNesting ?? false);
+const [linkMode, setLinkMode] = createSignal<LinkMode>(
+  // Same localStorage-garbage guard as density above.
+  LINK_MODE_ORDER.includes(_saved.linkMode as LinkMode) ? (_saved.linkMode as LinkMode) : 'all',
+);
 const [viewMode, setViewMode] = createSignal<ViewMode>(
   _saved.viewMode === 'connections' ? 'connections' : 'categories',
 );
@@ -589,6 +605,12 @@ function toggleViewMode() {
   setViewMode(v => (v === 'categories' ? 'connections' : 'categories'));
 }
 
+/** Advance to the next relation-arrow mode in the cycle, wrapping around. */
+function cycleLinkMode() {
+  const idx = LINK_MODE_ORDER.indexOf(linkMode());
+  setLinkMode(LINK_MODE_ORDER[(idx + 1) % LINK_MODE_ORDER.length]);
+}
+
 /** Toggle one topology node's collapsed state by instanceId. */
 function toggleTopoNode(instanceId: string) {
   setCollapsedTopoNodes(prev => {
@@ -733,6 +755,7 @@ function initDeviceStore() {
       groupIdentical: groupIdentical(),
       viewMode: viewMode(),
       usbNesting: usbNesting(),
+      linkMode: linkMode(),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
@@ -778,6 +801,7 @@ export {
   usbNesting,
   isGroupExpanded,
   viewMode,
+  linkMode,
   topologyForest,
   isTopoCollapsed,
   hasActiveFilters,
@@ -797,6 +821,7 @@ export {
   toggleUsbNesting,
   toggleGroup,
   toggleViewMode,
+  cycleLinkMode,
   toggleTopoNode,
   dismissGhost,
   clearAllGhosts,

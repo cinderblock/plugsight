@@ -9,6 +9,7 @@ import type { Component } from 'solid-js';
 import { Index, Show, Switch, Match } from 'solid-js';
 import type { DeviceCategory as DeviceCategoryType } from '~/lib/types';
 import { groupRows, type DeviceRow } from '~/lib/grouping';
+import { buildUsbRows } from '~/lib/usb-tree';
 import {
   toggleCategory,
   state,
@@ -18,10 +19,15 @@ import {
   recentAddsPerClass,
   recentRemovesPerClass,
   groupIdentical,
+  usbNesting,
+  toggleUsbNesting,
+  relationIndex,
+  USB_CONTROLLERS_CLASS_GUID,
 } from '~/lib/device-store';
 import DeviceIcon from './DeviceIcon';
 import DeviceEntry from './DeviceEntry';
 import DeviceGroup from './DeviceGroup';
+import UsbTreeRows from './UsbTreeRows';
 
 interface DeviceCategoryProps {
   category: DeviceCategoryType;
@@ -37,6 +43,10 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
   const recentRemoves = () => recentRemovesPerClass()[cat().classGuid] ?? 0;
   // Collapse runs of identically-named devices into group rows (view-only transform).
   const rows = () => groupRows(cat().classGuid, cat().devices, groupIdentical());
+  // USB controllers only: optional physical-nesting mode (hub/controller tree).
+  const isUsbCategory = () => cat().classGuid === USB_CONTROLLERS_CLASS_GUID;
+  const nestedMode = () => isUsbCategory() && usbNesting();
+  const usbRows = () => buildUsbRows(cat().devices, relationIndex().parentByChild, groupIdentical());
 
   return (
     <div
@@ -112,6 +122,31 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
               </span>
             </Show>
 
+            {/* USB only: toggle between the flat list and physical hub/controller nesting.
+                Always visible (a mode indicator, not just an action), highlighted when on. */}
+            <Show when={isUsbCategory()}>
+              <div class="shrink-0" onClick={e => e.stopPropagation()}>
+                <div
+                  role="button"
+                  class={`p-1.5 rounded-md transition-colors ${
+                    usbNesting()
+                      ? 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60'
+                      : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+                  aria-label={usbNesting() ? 'Show flat device list' : 'Nest devices by physical hub and controller'}
+                  aria-pressed={usbNesting()}
+                  onClick={() => toggleUsbNesting()}
+                >
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="6" y1="3" x2="6" y2="15" />
+                    <circle cx="18" cy="6" r="3" />
+                    <circle cx="6" cy="18" r="3" />
+                    <path d="M18 9a9 9 0 01-9 9" />
+                  </svg>
+                </div>
+              </div>
+            </Show>
+
             {/* Category action buttons (visible on hover) — inside the button row for alignment */}
             <div
               class="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/cat:opacity-100 transition-opacity"
@@ -152,25 +187,34 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
             style={{ 'grid-template-rows': isExpanded() ? '1fr' : '0fr' }}
           >
             <div class="overflow-hidden">
-              <Index each={rows()}>
-                {row => (
-                  <Switch>
-                    <Match when={row().kind === 'single' ? (row() as Extract<DeviceRow, { kind: 'single' }>) : null}>
-                      {single => <DeviceEntry displayDevice={single().device} />}
-                    </Match>
-                    <Match when={row().kind === 'group' ? (row() as Extract<DeviceRow, { kind: 'group' }>) : null}>
-                      {group => (
-                        <DeviceGroup
-                          groupKey={group().key}
-                          name={group().name}
-                          isGhost={group().isGhost}
-                          devices={group().devices}
-                        />
-                      )}
-                    </Match>
-                  </Switch>
-                )}
-              </Index>
+              <Show
+                when={nestedMode()}
+                fallback={
+                  <Index each={rows()}>
+                    {row => (
+                      <Switch>
+                        <Match
+                          when={row().kind === 'single' ? (row() as Extract<DeviceRow, { kind: 'single' }>) : null}
+                        >
+                          {single => <DeviceEntry displayDevice={single().device} />}
+                        </Match>
+                        <Match when={row().kind === 'group' ? (row() as Extract<DeviceRow, { kind: 'group' }>) : null}>
+                          {group => (
+                            <DeviceGroup
+                              groupKey={group().key}
+                              name={group().name}
+                              isGhost={group().isGhost}
+                              devices={group().devices}
+                            />
+                          )}
+                        </Match>
+                      </Switch>
+                    )}
+                  </Index>
+                }
+              >
+                <UsbTreeRows rows={usbRows()} />
+              </Show>
             </div>
           </div>
         </div>

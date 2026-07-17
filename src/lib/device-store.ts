@@ -47,6 +47,12 @@ const DENSITY_ORDER: readonly DensityLevel[] = ['normal', 'compact', 'dense'];
 /** Which arrangement the main pane shows: Windows classes or USB/PCI topology. */
 export type ViewMode = 'categories' | 'connections';
 
+/**
+ * Class GUID of "USB controllers" (braced lowercase, as the backend formats
+ * GUIDs). The physical-nesting mode is offered only on this category.
+ */
+export const USB_CONTROLLERS_CLASS_GUID = '{36fc9e60-c465-11cf-8056-444553540000}';
+
 // ── Store types ───────────────────────────────────────────────────────────
 
 interface DeviceStoreState {
@@ -76,6 +82,8 @@ interface PersistedState {
   groupIdentical: boolean;
   /** Which main-pane arrangement is active. */
   viewMode: ViewMode;
+  /** Whether the USB controllers category nests devices by physical hub/controller. */
+  usbNesting: boolean;
 }
 
 function loadPersistedState(): Partial<PersistedState> {
@@ -104,6 +112,7 @@ const [density, setDensity] = createSignal<DensityLevel>(
   DENSITY_ORDER.includes(_saved.density as DensityLevel) ? (_saved.density as DensityLevel) : 'normal',
 );
 const [groupIdentical, setGroupIdentical] = createSignal<boolean>(_saved.groupIdentical ?? true);
+const [usbNesting, setUsbNesting] = createSignal<boolean>(_saved.usbNesting ?? false);
 const [viewMode, setViewMode] = createSignal<ViewMode>(
   _saved.viewMode === 'connections' ? 'connections' : 'categories',
 );
@@ -570,6 +579,11 @@ function toggleGroupIdentical() {
   setGroupIdentical(v => !v);
 }
 
+/** Toggle physical hub/controller nesting within the USB controllers category. */
+function toggleUsbNesting() {
+  setUsbNesting(v => !v);
+}
+
 /** Switch the main pane between the category view and the connection topology. */
 function toggleViewMode() {
   setViewMode(v => (v === 'categories' ? 'connections' : 'categories'));
@@ -718,6 +732,7 @@ function initDeviceStore() {
       density: density(),
       groupIdentical: groupIdentical(),
       viewMode: viewMode(),
+      usbNesting: usbNesting(),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
@@ -760,6 +775,7 @@ export {
   GHOST_TIMEOUT_INDEFINITE,
   density,
   groupIdentical,
+  usbNesting,
   isGroupExpanded,
   viewMode,
   topologyForest,
@@ -778,6 +794,7 @@ export {
   collapseAllCategories,
   cycleDensity,
   toggleGroupIdentical,
+  toggleUsbNesting,
   toggleGroup,
   toggleViewMode,
   toggleTopoNode,

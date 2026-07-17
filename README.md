@@ -34,6 +34,9 @@ Selecting a device slides in a detail panel showing full properties — hardware
 ### Grouped Tree View
 Devices are organized by setup class (Display adapters, Network adapters, USB controllers, etc.) with collapsible category headers showing device counts and problem counts. Native Windows class icons are extracted from the registry and displayed alongside each category.
 
+### USB Physical Nesting
+The **USB controllers** category has a toggle on its header that switches it from the flat list to a tree nested by physical connection — host controller → root hub → hub → device — matching the real plugs and hubs on your machine. Runs of identical devices on the same hub still collapse into expandable group rows, and unplugged hubs keep their ghost children nested beneath them.
+
 ### Search, Filter & Hide
 - **Full-text search** across device names, descriptions, manufacturers, hardware IDs, and instance IDs.
 - **"Problems only" toggle** filters the tree to show only devices with errors, warnings, or missing drivers.

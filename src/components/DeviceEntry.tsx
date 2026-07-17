@@ -35,6 +35,14 @@ interface DeviceEntryProps {
    * actually differs.
    */
   detail?: string;
+  /**
+   * When set, this entry is a tree node with nested children: the leading
+   * spacer becomes an expand/collapse chevron and this callback toggles the
+   * children drawer (used by the USB physical-nesting view).
+   */
+  onToggleChildren?: () => void;
+  /** Whether the children drawer is collapsed (chevron orientation). */
+  childrenCollapsed?: boolean;
 }
 
 const DeviceEntry: Component<DeviceEntryProps> = props => {
@@ -104,8 +112,29 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
           onMouseLeave={() => setHoveredId(null)}
         >
           {/* Chevron-width spacer so single rows align with group headers
-              (which lead with a chevron) and read at the same tree depth. */}
-          <div class="w-3.5 shrink-0" aria-hidden="true" />
+              (which lead with a chevron) and read at the same tree depth.
+              Becomes a live expand/collapse chevron for tree-node entries. */}
+          <Show when={props.onToggleChildren} fallback={<div class="w-3.5 shrink-0" aria-hidden="true" />}>
+            <div
+              role="button"
+              class="w-3.5 shrink-0 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+              aria-label={props.childrenCollapsed ? 'Expand connected devices' : 'Collapse connected devices'}
+              onClick={e => {
+                e.stopPropagation();
+                props.onToggleChildren?.();
+              }}
+            >
+              <svg
+                class={`w-3.5 h-3.5 transition-transform duration-200 ${props.childrenCollapsed ? '' : 'rotate-90'}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </div>
+          </Show>
 
           {/* Device icon */}
           <div

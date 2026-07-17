@@ -76,7 +76,7 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
           <div
             role="button"
             class="w-4 h-4 shrink-0 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-            title={collapsed() ? 'Expand' : 'Collapse'}
+            aria-label={collapsed() ? 'Expand' : 'Collapse'}
             onClick={e => {
               e.stopPropagation();
               toggleTopoNode(device().instanceId);

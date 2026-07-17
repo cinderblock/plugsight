@@ -13,13 +13,28 @@ import type { Component } from 'solid-js';
 import { Show, createMemo } from 'solid-js';
 import type { DisplayDevice } from '~/lib/types';
 import { hasDeviceProblem, statusLabel } from '~/lib/types';
-import { selectedId, setSelectedId, recentChanges, dismissGhost, hideDevice, density } from '~/lib/device-store';
+import {
+  selectedId,
+  setSelectedId,
+  recentChanges,
+  dismissGhost,
+  hideDevice,
+  density,
+  setHoveredId,
+} from '~/lib/device-store';
 import { openDeviceProperties } from '~/lib/tauri';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
 
 interface DeviceEntryProps {
   displayDevice: DisplayDevice;
+  /**
+   * Distinguishing detail to show on the secondary line instead of the
+   * manufacturer — used for children of a collapsed "identical devices" group,
+   * where the manufacturer is the same for all and the instance ID is what
+   * actually differs.
+   */
+  detail?: string;
 }
 
 const DeviceEntry: Component<DeviceEntryProps> = props => {
@@ -82,11 +97,19 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
         ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-300 dark:ring-blue-700' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}
         ${isRecentChange() ? 'device-entry--highlight' : ''}
       `}
-          onClick={() => setSelectedId(device().instanceId)}
+          data-instance-id={device().instanceId}
+          onClick={() => setSelectedId(prev => (prev === device().instanceId ? null : device().instanceId))}
           onDblClick={() => openDeviceProperties(device().instanceId)}
+          onMouseEnter={() => setHoveredId(device().instanceId)}
+          onMouseLeave={() => setHoveredId(null)}
         >
+          {/* Chevron-width spacer so single rows align with group headers
+              (which lead with a chevron) and read at the same tree depth. */}
+          <div class="w-3.5 shrink-0" aria-hidden="true" />
+
           {/* Device icon */}
           <div
+            data-role="icon"
             class={`shrink-0 ${isGhost() ? 'text-gray-400 dark:text-gray-600' : hasProblem() ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}`}
           >
             <DeviceIcon iconId={iconId()} classGuid={device().classGuid} class="w-6 h-6" />
@@ -107,25 +130,35 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
 
               {/* Status badge (inline, next to name — NOT overlaid on icon!) */}
               <StatusBadge status={device().status} compact />
+
+              {/* Zero-width marker at the end of the label, for relation connectors. */}
+              <span data-role="label-end" aria-hidden="true" />
             </div>
 
-            {/* Secondary info line */}
+            {/* Secondary info line — inner span lets the relation-arrow overlay
+                measure the actual text extent (the div itself is full-width). */}
             <div class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-              <Show when={isGhost()}>
-                <span class="text-gray-400 dark:text-gray-500 italic">Removed {ghostTimeAgo()}</span>
-              </Show>
-              <Show when={!isGhost() && hasProblem()}>
-                <span
-                  class={
-                    device().status.kind === 'error'
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-amber-600 dark:text-amber-400'
-                  }
-                >
-                  {statusLabel(device().status)}
-                </span>
-              </Show>
-              <Show when={!isGhost() && !hasProblem()}>{device().manufacturer}</Show>
+              <span data-arrow-extent>
+                <Show when={isGhost()}>
+                  <span class="text-gray-400 dark:text-gray-500 italic">Removed {ghostTimeAgo()}</span>
+                </Show>
+                <Show when={!isGhost() && hasProblem()}>
+                  <span
+                    class={
+                      device().status.kind === 'error'
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-amber-600 dark:text-amber-400'
+                    }
+                  >
+                    {statusLabel(device().status)}
+                  </span>
+                </Show>
+                <Show when={!isGhost() && !hasProblem()}>
+                  <Show when={props.detail} fallback={device().manufacturer}>
+                    <span class="font-mono text-[11px] text-gray-400 dark:text-gray-500">{props.detail}</span>
+                  </Show>
+                </Show>
+              </span>
             </div>
           </div>
 
@@ -135,7 +168,7 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
             <div
               role="button"
               class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
-              title="Properties"
+              aria-label="Properties"
               onClick={e => {
                 e.stopPropagation();
                 openDeviceProperties(device().instanceId);
@@ -152,7 +185,7 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
             <div
               role="button"
               class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
-              title="Hide this device"
+              aria-label="Hide this device"
               onClick={e => {
                 e.stopPropagation();
                 hideDevice(device().instanceId);
@@ -170,7 +203,7 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
               <div
                 role="button"
                 class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
-                title="Dismiss"
+                aria-label="Dismiss"
                 onClick={e => {
                   e.stopPropagation();
                   dismissGhost(device().instanceId);

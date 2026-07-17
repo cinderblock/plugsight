@@ -9,10 +9,13 @@ import type { Component } from 'solid-js';
 import { Index, Show } from 'solid-js';
 import { categories, state } from '~/lib/device-store';
 import DeviceCategory from './DeviceCategory';
+import RelationArrows from './RelationArrows';
 
 const DeviceTree: Component = () => {
+  let containerRef!: HTMLDivElement;
   return (
-    <div class="device-tree flex-1 overflow-y-auto py-2 px-1">
+    // Side padding doubles as gutter space for the relation-arrow buses.
+    <div ref={containerRef} class="device-tree relative flex-1 overflow-y-auto py-2 pl-6 pr-8">
       {/* Loading state */}
       <Show when={!state.enumerationComplete}>
         <div class="flex items-center justify-center py-8 gap-3 text-gray-400 dark:text-gray-500">
@@ -37,9 +40,10 @@ const DeviceTree: Component = () => {
       </Show>
 
       {/* Device categories */}
-      <Index each={categories()}>
-        {category => <DeviceCategory category={category()} />}
-      </Index>
+      <Index each={categories()}>{category => <DeviceCategory category={category()} />}</Index>
+
+      {/* Hover relationship connectors (overlay) */}
+      <RelationArrows container={() => containerRef} />
     </div>
   );
 };

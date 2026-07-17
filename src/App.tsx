@@ -5,11 +5,12 @@
  */
 
 import type { Component } from 'solid-js';
-import { Show } from 'solid-js';
-import { initDeviceStore, selectedDevice } from '~/lib/device-store';
+import { Show, onMount, onCleanup } from 'solid-js';
+import { initDeviceStore, selectedDevice, setSelectedId, viewMode } from '~/lib/device-store';
 import { initUpdater } from '~/lib/updater';
 import Toolbar from '~/components/Toolbar';
 import DeviceTree from '~/components/DeviceTree';
+import TopologyView from '~/components/TopologyView';
 import DeviceDetail from '~/components/DeviceDetail';
 import StatusBar from '~/components/StatusBar';
 
@@ -20,6 +21,15 @@ const App: Component = () => {
   // Start background update checking against GitHub releases.
   initUpdater();
 
+  // Escape clears the current selection (hides the detail panel).
+  onMount(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedId(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    onCleanup(() => window.removeEventListener('keydown', onKeyDown));
+  });
+
   return (
     <div class="h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 select-none">
       {/* Top toolbar */}
@@ -27,8 +37,10 @@ const App: Component = () => {
 
       {/* Main content: tree + optional detail panel */}
       <div class="flex flex-1 min-h-0">
-        {/* Device tree (takes remaining space) */}
-        <DeviceTree />
+        {/* Main pane: category tree or USB/PCI connection topology */}
+        <Show when={viewMode() === 'connections'} fallback={<DeviceTree />}>
+          <TopologyView />
+        </Show>
 
         {/* Detail panel (slides in when a device is selected) */}
         <Show when={selectedDevice()}>

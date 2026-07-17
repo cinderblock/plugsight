@@ -13,8 +13,9 @@ import { createSignal, createMemo, createEffect, batch, onCleanup, onMount } fro
 import { createStore, produce } from 'solid-js/store';
 import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice } from './types';
 import { hasDeviceProblem } from './types';
-import { onDeviceEvent, streamInitialDevices } from './tauri';
+import { onDeviceEvent, getAllDevices } from './tauri';
 import { loadClassIcons } from './icon-cache';
+import { buildTopologyForest, type TopoNode } from './topology';
 
 // ── Configuration ─────────────────────────────────────────────────────────
 
@@ -43,6 +44,9 @@ export type DensityLevel = 'normal' | 'compact' | 'dense';
 
 const DENSITY_ORDER: readonly DensityLevel[] = ['normal', 'compact', 'dense'];
 
+/** Which arrangement the main pane shows: Windows classes or USB/PCI topology. */
+export type ViewMode = 'categories' | 'connections';
+
 // ── Store types ───────────────────────────────────────────────────────────
 
 interface DeviceStoreState {
@@ -68,6 +72,10 @@ interface PersistedState {
   ghostTimeoutMs: number;
   /** Row density for the device list. Missing on old installs → defaults to 'normal'. */
   density: DensityLevel;
+  /** Whether to collapse runs of identically-named devices into one expandable row. */
+  groupIdentical: boolean;
+  /** Which main-pane arrangement is active. */
+  viewMode: ViewMode;
 }
 
 function loadPersistedState(): Partial<PersistedState> {
@@ -95,7 +103,26 @@ const [density, setDensity] = createSignal<DensityLevel>(
   // hand-edited the value or we removed a level in a future version.
   DENSITY_ORDER.includes(_saved.density as DensityLevel) ? (_saved.density as DensityLevel) : 'normal',
 );
+const [groupIdentical, setGroupIdentical] = createSignal<boolean>(_saved.groupIdentical ?? true);
+const [viewMode, setViewMode] = createSignal<ViewMode>(
+  _saved.viewMode === 'connections' ? 'connections' : 'categories',
+);
+/**
+ * Collapsed topology nodes, keyed by instanceId. Not persisted; the tree starts
+ * fully expanded each run.
+ */
+const [collapsedTopoNodes, setCollapsedTopoNodes] = createSignal<Set<string>>(new Set());
+/**
+ * Per-group expansion state, keyed by `groupKey(classGuid, isGhost, name)`.
+ *
+ * Deliberately NOT persisted: group identity is derived from transient device
+ * names, so saved keys would go stale across sessions. Groups simply start
+ * collapsed each run.
+ */
+const [expandedGroups, setExpandedGroups] = createSignal<Set<string>>(new Set());
 const [recentChanges, setRecentChanges] = createSignal<Set<string>>(new Set());
+/** Instance ID of the device currently hovered, for highlighting related devices. */
+const [hoveredId, setHoveredId] = createSignal<string | null>(null);
 /** Recent add/remove counts per class GUID, for category header pills. */
 const [recentAddsPerClass, setRecentAddsPerClass] = createSignal<Record<string, number>>({});
 const [recentRemovesPerClass, setRecentRemovesPerClass] = createSignal<Record<string, number>>({});
@@ -152,11 +179,12 @@ function handleDeviceAdded(device: DeviceInfo) {
       setState('expandedCategories', device.classGuid, true);
     }
 
-    // Mark as recently changed for highlight animation.
-    markRecentChange(device.instanceId);
-
-    // Track recent add for category pill (skip during initial enumeration).
+    // Flash the highlight + count pill only for genuinely new devices. During
+    // the initial enumeration the backend streams every existing device as an
+    // "added" event — those aren't new, so highlighting them all produces a
+    // flood of flashing. Skip both until enumeration has completed.
     if (state.enumerationComplete) {
+      markRecentChange(device.instanceId);
       markRecentAdd(device.classGuid);
     }
   });
@@ -294,12 +322,75 @@ function sweepGhosts() {
 
 // ── Derived state ─────────────────────────────────────────────────────────
 
+/**
+ * Directed parent→child relationship index across all live + ghost devices.
+ *
+ * Windows exposes a device's parent as an instance path (DEVPKEY_DEVICE_PARENT),
+ * which equals some other device's `instanceId`. Matching is case-insensitive
+ * because the parent path and instance ID can differ in case.
+ *
+ * Defined before `categories` because `createMemo` is eager — `categories`
+ * reads `descendantCounts()` at creation time, so these must already exist.
+ */
+const relationIndex = createMemo<{
+  childrenByParent: Map<string, Set<string>>;
+  parentByChild: Map<string, string>;
+}>(() => {
+  const all = [...Object.values(state.devices), ...Object.values(state.ghosts).map(g => g.device)];
+
+  // Resolve a (possibly differently-cased) parent path back to a real instanceId.
+  const byUpper = new Map<string, string>();
+  for (const d of all) byUpper.set(d.instanceId.toUpperCase(), d.instanceId);
+
+  const childrenByParent = new Map<string, Set<string>>();
+  const parentByChild = new Map<string, string>();
+  for (const d of all) {
+    if (!d.parentId) continue;
+    const parentReal = byUpper.get(d.parentId.toUpperCase());
+    if (!parentReal || parentReal === d.instanceId) continue;
+    parentByChild.set(d.instanceId, parentReal);
+    let kids = childrenByParent.get(parentReal);
+    if (!kids) {
+      kids = new Set();
+      childrenByParent.set(parentReal, kids);
+    }
+    kids.add(d.instanceId);
+  }
+  return { childrenByParent, parentByChild };
+});
+
+/**
+ * Descendant count (whole subtree, excluding self) per device instance ID.
+ * Drives "eldest first" sorting — a host controller / hub with a large subtree
+ * outranks leaf devices.
+ */
+const descendantCounts = createMemo<Map<string, number>>(() => {
+  const { childrenByParent } = relationIndex();
+  const memo = new Map<string, number>();
+  const visiting = new Set<string>();
+  const count = (id: string): number => {
+    const cached = memo.get(id);
+    if (cached !== undefined) return cached;
+    if (visiting.has(id)) return 0; // guard against unexpected cycles
+    visiting.add(id);
+    let total = 0;
+    const kids = childrenByParent.get(id);
+    if (kids) for (const kid of kids) total += 1 + count(kid);
+    visiting.delete(id);
+    memo.set(id, total);
+    return total;
+  };
+  for (const id of childrenByParent.keys()) count(id);
+  return memo;
+});
+
 /** All devices grouped by category, including ghosts, filtered by search. */
 const categories = createMemo<DeviceCategory[]>(() => {
   const query = searchQuery().toLowerCase().trim();
   const problemsOnly = showProblemsOnly();
   const hiddenDevices = hiddenDeviceIds();
   const hiddenClasses = hiddenClassGuids();
+  const subtreeSizes = descendantCounts();
   const catMap = new Map<string, DeviceCategory>();
 
   // Helper to get or create a category.
@@ -356,11 +447,52 @@ const categories = createMemo<DeviceCategory[]>(() => {
     cat.devices.sort((a, b) => {
       // Ghosts sort to the end.
       if (a.isGhost !== b.isGhost) return a.isGhost ? 1 : -1;
+      // "Eldest" first: devices with bigger subtrees (hubs, controllers) on top.
+      const sa = subtreeSizes.get(a.device.instanceId) ?? 0;
+      const sb = subtreeSizes.get(b.device.instanceId) ?? 0;
+      if (sb !== sa) return sb - sa;
       return a.device.name.localeCompare(b.device.name);
     });
   }
 
   return result;
+});
+
+/** Live devices arranged by USB/PCI connection topology (a forest of TopoNodes). */
+const topologyForest = createMemo<TopoNode[]>(() => {
+  const { childrenByParent, parentByChild } = relationIndex();
+  const devicesById = new Map<string, DeviceInfo>();
+  for (const d of Object.values(state.devices)) devicesById.set(d.instanceId, d);
+
+  if (!showProblemsOnly()) {
+    return buildTopologyForest(devicesById, childrenByParent, parentByChild);
+  }
+
+  // Problems filter: keep problem devices plus enough context for relationships
+  // to still make sense — their ancestor chain (so the tree can place them) and
+  // their direct children. Non-problem context nodes are rendered dimmed.
+  const include = new Set<string>();
+  for (const d of devicesById.values()) {
+    if (!hasDeviceProblem(d.status)) continue;
+    include.add(d.instanceId);
+    // Ancestor chain up to the root.
+    let pid = parentByChild.get(d.instanceId);
+    while (pid && devicesById.has(pid) && !include.has(pid)) {
+      include.add(pid);
+      pid = parentByChild.get(pid);
+    }
+    // Direct children.
+    const kids = childrenByParent.get(d.instanceId);
+    if (kids) for (const k of kids) include.add(k);
+  }
+
+  return buildTopologyForest(
+    devicesById,
+    childrenByParent,
+    parentByChild,
+    d => include.has(d.instanceId),
+    d => !hasDeviceProblem(d.status),
+  );
 });
 
 function matchesSearch(device: DeviceInfo, query: string): boolean {
@@ -431,6 +563,46 @@ function cycleDensity() {
   const idx = DENSITY_ORDER.indexOf(current);
   const next = DENSITY_ORDER[(idx + 1) % DENSITY_ORDER.length];
   setDensity(next);
+}
+
+/** Toggle whether identically-named devices collapse into a single group row. */
+function toggleGroupIdentical() {
+  setGroupIdentical(v => !v);
+}
+
+/** Switch the main pane between the category view and the connection topology. */
+function toggleViewMode() {
+  setViewMode(v => (v === 'categories' ? 'connections' : 'categories'));
+}
+
+/** Toggle one topology node's collapsed state by instanceId. */
+function toggleTopoNode(instanceId: string) {
+  setCollapsedTopoNodes(prev => {
+    const next = new Set(prev);
+    if (next.has(instanceId)) next.delete(instanceId);
+    else next.add(instanceId);
+    return next;
+  });
+}
+
+/** Whether a topology node is currently collapsed (children hidden). */
+function isTopoCollapsed(instanceId: string): boolean {
+  return collapsedTopoNodes().has(instanceId);
+}
+
+/** Toggle one group's expanded state by its stable group key. */
+function toggleGroup(key: string) {
+  setExpandedGroups(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
+}
+
+/** Whether a group (by its stable key) is currently expanded. */
+function isGroupExpanded(key: string): boolean {
+  return expandedGroups().has(key);
 }
 
 function dismissGhost(instanceId: string) {
@@ -509,13 +681,26 @@ function initDeviceStore() {
   let unlisten: (() => void) | null = null;
 
   onMount(async () => {
-    // 1. Subscribe to device events first.
+    // 1. Subscribe to incremental device events first, so no change that happens
+    //    after our initial snapshot is missed.
     unlisten = await onDeviceEvent(handleDeviceEvent);
 
-    // 2. Now that we're listening, ask the backend to stream the initial
-    //    device list as individual Added events. The UI populates progressively
-    //    as each device is discovered. An EnumerationComplete event follows.
-    streamInitialDevices();
+    // 2. Load the initial device list via the command's RETURN VALUE rather than
+    //    a fire-and-forget emitted stream. On a cold start the webview's event
+    //    channel isn't reliably attached the instant `listen()` resolves, so
+    //    emitted Added events can be dropped (the list would come up empty until
+    //    a manual reload). An invoke's response is delivered as the direct reply
+    //    to the request and can't be lost that way.
+    try {
+      const devices = await getAllDevices();
+      batch(() => {
+        for (const device of devices) handleDeviceAdded(device);
+        setState('enumerationComplete', true);
+      });
+      loadClassIcons([...new Set(devices.map(d => d.classGuid))]);
+    } catch (e) {
+      console.error('Initial device enumeration failed:', e);
+    }
   });
 
   // Periodic ghost sweeper.
@@ -531,6 +716,8 @@ function initDeviceStore() {
       expandedCategories: { ...state.expandedCategories },
       ghostTimeoutMs: ghostTimeoutMs(),
       density: density(),
+      groupIdentical: groupIdentical(),
+      viewMode: viewMode(),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
@@ -572,16 +759,28 @@ export {
   setGhostTimeoutMs,
   GHOST_TIMEOUT_INDEFINITE,
   density,
+  groupIdentical,
+  isGroupExpanded,
+  viewMode,
+  topologyForest,
+  isTopoCollapsed,
   hasActiveFilters,
   counts,
   recentChanges,
   recentAddsPerClass,
   recentRemovesPerClass,
+  hoveredId,
+  setHoveredId,
+  relationIndex,
   // Actions
   toggleCategory,
   expandAllCategories,
   collapseAllCategories,
   cycleDensity,
+  toggleGroupIdentical,
+  toggleGroup,
+  toggleViewMode,
+  toggleTopoNode,
   dismissGhost,
   clearAllGhosts,
   pulseAllDevices,

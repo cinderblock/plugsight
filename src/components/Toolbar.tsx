@@ -22,6 +22,10 @@ import {
   density,
   cycleDensity,
   type DensityLevel,
+  groupIdentical,
+  toggleGroupIdentical,
+  viewMode,
+  toggleViewMode,
 } from '~/lib/device-store';
 import { scanForHardwareChanges } from '~/lib/tauri';
 
@@ -130,6 +134,36 @@ const Toolbar: Component = () => {
           title={`Row density: ${DENSITY_LABELS[density()]} — click for ${DENSITY_NEXT_LABEL[density()]}`}
           onClick={cycleDensity}
           icon={<DensityIcon level={density()} />}
+        />
+
+        <ToolbarButton
+          title={`Group identical devices: ${groupIdentical() ? 'On' : 'Off'}`}
+          active={groupIdentical()}
+          onClick={toggleGroupIdentical}
+          icon={
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="13" height="13" rx="1.5" />
+              <path d="M21 8v11a2 2 0 01-2 2H8" />
+            </svg>
+          }
+        />
+
+        <ToolbarButton
+          title={
+            viewMode() === 'connections'
+              ? 'View: Connections (USB/PCI tree) — click for Categories'
+              : 'View: Categories — click for Connections (USB/PCI tree)'
+          }
+          active={viewMode() === 'connections'}
+          onClick={toggleViewMode}
+          icon={
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="2" width="6" height="5" rx="1" />
+              <rect x="2" y="17" width="6" height="5" rx="1" />
+              <rect x="16" y="17" width="6" height="5" rx="1" />
+              <path d="M12 7v3M5 17v-2a2 2 0 012-2h10a2 2 0 012 2v2" />
+            </svg>
+          }
         />
 
         <div class="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
@@ -258,9 +292,17 @@ const ToolbarButton: Component<{
   onClick: () => void;
   icon: any;
   loading?: boolean;
+  /** Render in an "active/on" highlighted state (for toggle buttons). */
+  active?: boolean;
 }> = props => (
   <button
-    class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+    class="p-1.5 rounded-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+    classList={{
+      'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/50':
+        props.active,
+      'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200':
+        !props.active,
+    }}
     title={props.title}
     onClick={props.onClick}
     disabled={props.loading}

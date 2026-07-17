@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PlugSight</title>
+    <!-- Paint the correct background on first frame, before the JS bundle mounts,
+         so dark-mode users don't get a white flash. Driven by the OS preference,
+         matching Tailwind's `dark:` variant (gray-900 = #111827). -->
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      html {
+        background-color: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        html {
+          background-color: #111827;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

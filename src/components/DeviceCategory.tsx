@@ -6,11 +6,22 @@
  */
 
 import type { Component } from 'solid-js';
-import { Index, Show } from 'solid-js';
+import { Index, Show, Switch, Match } from 'solid-js';
 import type { DeviceCategory as DeviceCategoryType } from '~/lib/types';
-import { toggleCategory, state, showProblemsOnly, hideCategory, soloCategory, recentAddsPerClass, recentRemovesPerClass } from '~/lib/device-store';
+import { groupRows, type DeviceRow } from '~/lib/grouping';
+import {
+  toggleCategory,
+  state,
+  showProblemsOnly,
+  hideCategory,
+  soloCategory,
+  recentAddsPerClass,
+  recentRemovesPerClass,
+  groupIdentical,
+} from '~/lib/device-store';
 import DeviceIcon from './DeviceIcon';
 import DeviceEntry from './DeviceEntry';
+import DeviceGroup from './DeviceGroup';
 
 interface DeviceCategoryProps {
   category: DeviceCategoryType;
@@ -24,121 +35,146 @@ const DeviceCategory: Component<DeviceCategoryProps> = props => {
   const ghostCount = () => visibleDevices().filter(d => d.isGhost).length;
   const recentAdds = () => recentAddsPerClass()[cat().classGuid] ?? 0;
   const recentRemoves = () => recentRemovesPerClass()[cat().classGuid] ?? 0;
+  // Collapse runs of identically-named devices into group rows (view-only transform).
+  const rows = () => groupRows(cat().classGuid, cat().devices, groupIdentical());
 
   return (
     <div
       class="grid transition-[grid-template-rows] duration-300 ease-out"
-      style={{ "grid-template-rows": cat().visible ? "1fr" : "0fr" }}
+      style={{ 'grid-template-rows': cat().visible ? '1fr' : '0fr' }}
     >
-    <div class="overflow-hidden">
-    <div class="category-group group/cat">
-      {/* Category header — single row, hover covers the full width */}
-      <button
-        class="w-full flex items-center gap-2.5 px-3 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-colors"
-        onClick={() => toggleCategory(cat().classGuid)}
-      >
-        {/* Expand/collapse chevron */}
-        <svg
-          class={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 shrink-0 ${
-            isExpanded() ? 'rotate-90' : ''
-          }`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
-
-        {/* Category icon */}
-        <div class="text-gray-500 dark:text-gray-400 shrink-0">
-          <DeviceIcon iconId={cat().iconId} classGuid={cat().classGuid} class="w-6 h-6" />
-        </div>
-
-        {/* Category name */}
-        <span class="text-sm font-semibold text-gray-800 dark:text-gray-200 text-left truncate">
-          {cat().className}
-        </span>
-
-        {/* Device count with +/- pills */}
-        <div class="flex items-center gap-1 shrink-0">
-          {/* Recent adds pill */}
-          <Show when={recentAdds() > 0}>
-            <span class="inline-flex items-center h-5 px-1.5 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 tabular-nums">
-              +{recentAdds()}
-            </span>
-          </Show>
-
-          {/* Device count */}
-          <span class="text-xs text-gray-400 dark:text-gray-500 tabular-nums min-w-[1.5rem] text-center">
-            {liveCount()}
-          </span>
-
-          {/* Recent removes pill */}
-          <Show when={recentRemoves() > 0}>
-            <span class="inline-flex items-center h-5 px-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 tabular-nums">
-              -{recentRemoves()}
-            </span>
-          </Show>
-        </div>
-
-        {/* Spacer pushes error badge and action buttons to the right */}
-        <div class="flex-1" />
-
-        {/* Problem count badge — stays on the right */}
-        <Show when={cat().problemCount > 0}>
-          <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 shrink-0">
-            {cat().problemCount}
-          </span>
-        </Show>
-
-        {/* Category action buttons (visible on hover) — inside the button row for alignment */}
-        <div
-          class="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/cat:opacity-100 transition-opacity"
-          onClick={e => e.stopPropagation()}
-        >
-          {/* Solo — show only this category */}
-          <div
-            role="button"
-            class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-            title="Show only this category"
-            onClick={() => soloCategory(cat().classGuid)}
+      <div class="overflow-hidden">
+        <div class="category-group group/cat">
+          {/* Category header — single row, hover covers the full width */}
+          <button
+            class="w-full flex items-center gap-2.5 px-3 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-colors"
+            data-arrow-row
+            onClick={() => toggleCategory(cat().classGuid)}
           >
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
+            {/* Expand/collapse chevron */}
+            <svg
+              class={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 shrink-0 ${
+                isExpanded() ? 'rotate-90' : ''
+              }`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="9 18 15 12 9 6" />
             </svg>
-          </div>
 
-          {/* Hide this category */}
+            {/* Category icon */}
+            <div class="text-gray-500 dark:text-gray-400 shrink-0">
+              <DeviceIcon iconId={cat().iconId} classGuid={cat().classGuid} class="w-6 h-6" />
+            </div>
+
+            {/* Category name */}
+            <span class="text-sm font-semibold text-gray-800 dark:text-gray-200 text-left truncate">
+              {cat().className}
+            </span>
+
+            {/* Device count with +/- pills */}
+            <div class="flex items-center gap-1 shrink-0">
+              {/* Recent adds pill */}
+              <Show when={recentAdds() > 0}>
+                <span class="inline-flex items-center h-5 px-1.5 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 tabular-nums">
+                  +{recentAdds()}
+                </span>
+              </Show>
+
+              {/* Device count */}
+              <span class="text-xs text-gray-400 dark:text-gray-500 tabular-nums min-w-[1.5rem] text-center">
+                {liveCount()}
+              </span>
+
+              {/* Recent removes pill */}
+              <Show when={recentRemoves() > 0}>
+                <span class="inline-flex items-center h-5 px-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 tabular-nums">
+                  -{recentRemoves()}
+                </span>
+              </Show>
+            </div>
+
+            {/* Zero-width marker at the end of the name-line content, for relation connectors. */}
+            <span data-role="label-end" aria-hidden="true" />
+
+            {/* Spacer pushes error badge and action buttons to the right */}
+            <div class="flex-1" />
+
+            {/* Problem count badge — stays on the right */}
+            <Show when={cat().problemCount > 0}>
+              <span
+                data-arrow-extent
+                class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 shrink-0"
+              >
+                {cat().problemCount}
+              </span>
+            </Show>
+
+            {/* Category action buttons (visible on hover) — inside the button row for alignment */}
+            <div
+              class="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/cat:opacity-100 transition-opacity"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Solo — show only this category */}
+              <div
+                role="button"
+                class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                aria-label="Show only this category"
+                onClick={() => soloCategory(cat().classGuid)}
+              >
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </div>
+
+              {/* Hide this category */}
+              <div
+                role="button"
+                class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                aria-label="Hide this category"
+                onClick={() => hideCategory(cat().classGuid)}
+              >
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+                  <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+              </div>
+            </div>
+          </button>
+
+          {/* Device entries — drawer animation via CSS grid, per-device animation via TransitionGroup */}
           <div
-            role="button"
-            class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-            title="Hide this category"
-            onClick={() => hideCategory(cat().classGuid)}
+            class="ml-4 pl-2 border-l border-gray-200 dark:border-gray-700/50 grid transition-[grid-template-rows] duration-300 ease-out"
+            style={{ 'grid-template-rows': isExpanded() ? '1fr' : '0fr' }}
           >
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
-              <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
-              <line x1="1" y1="1" x2="23" y2="23" />
-            </svg>
+            <div class="overflow-hidden">
+              <Index each={rows()}>
+                {row => (
+                  <Switch>
+                    <Match when={row().kind === 'single' ? (row() as Extract<DeviceRow, { kind: 'single' }>) : null}>
+                      {single => <DeviceEntry displayDevice={single().device} />}
+                    </Match>
+                    <Match when={row().kind === 'group' ? (row() as Extract<DeviceRow, { kind: 'group' }>) : null}>
+                      {group => (
+                        <DeviceGroup
+                          groupKey={group().key}
+                          name={group().name}
+                          isGhost={group().isGhost}
+                          devices={group().devices}
+                        />
+                      )}
+                    </Match>
+                  </Switch>
+                )}
+              </Index>
+            </div>
           </div>
-        </div>
-      </button>
-
-      {/* Device entries — drawer animation via CSS grid, per-device animation via TransitionGroup */}
-      <div
-        class="ml-4 pl-2 border-l border-gray-200 dark:border-gray-700/50 grid transition-[grid-template-rows] duration-300 ease-out"
-        style={{ "grid-template-rows": isExpanded() ? "1fr" : "0fr" }}
-      >
-        <div class="overflow-hidden">
-          <Index each={cat().devices}>
-            {displayDevice => <DeviceEntry displayDevice={displayDevice()} />}
-          </Index>
         </div>
       </div>
-    </div>
-    </div>
     </div>
   );
 };

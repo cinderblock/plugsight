@@ -133,10 +133,12 @@ const [viewMode, setViewMode] = createSignal<ViewMode>(
   _saved.viewMode === 'connections' ? 'connections' : 'categories',
 );
 /**
- * Collapsed topology nodes, keyed by instanceId. Not persisted; the tree starts
- * fully expanded each run.
+ * Topology nodes whose expand/collapse state the user has flipped away from its
+ * default, keyed by instanceId. Defaults come from `TopoNode.startCollapsed`
+ * (expanded down to the physical-plug level, device internals collapsed). Not
+ * persisted; toggles reset each run.
  */
-const [collapsedTopoNodes, setCollapsedTopoNodes] = createSignal<Set<string>>(new Set());
+const [toggledTopoNodes, setToggledTopoNodes] = createSignal<Set<string>>(new Set());
 /**
  * Per-group expansion state, keyed by `groupKey(classGuid, isGhost, name)`.
  *
@@ -611,9 +613,9 @@ function cycleLinkMode() {
   setLinkMode(LINK_MODE_ORDER[(idx + 1) % LINK_MODE_ORDER.length]);
 }
 
-/** Toggle one topology node's collapsed state by instanceId. */
+/** Flip one topology node's expand/collapse state away from (or back to) its default. */
 function toggleTopoNode(instanceId: string) {
-  setCollapsedTopoNodes(prev => {
+  setToggledTopoNodes(prev => {
     const next = new Set(prev);
     if (next.has(instanceId)) next.delete(instanceId);
     else next.add(instanceId);
@@ -621,9 +623,13 @@ function toggleTopoNode(instanceId: string) {
   });
 }
 
-/** Whether a topology node is currently collapsed (children hidden). */
-function isTopoCollapsed(instanceId: string): boolean {
-  return collapsedTopoNodes().has(instanceId);
+/**
+ * Whether a topology node's expand/collapse state is flipped from its default.
+ * Callers combine this with the node's `startCollapsed`:
+ * collapsed = startCollapsed !== isTopoToggled(id).
+ */
+function isTopoToggled(instanceId: string): boolean {
+  return toggledTopoNodes().has(instanceId);
 }
 
 /** Toggle one group's expanded state by its stable group key. */
@@ -803,7 +809,7 @@ export {
   viewMode,
   linkMode,
   topologyForest,
-  isTopoCollapsed,
+  isTopoToggled,
   hasActiveFilters,
   counts,
   recentChanges,

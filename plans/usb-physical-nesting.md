@@ -85,6 +85,27 @@ within each level (the existing `groupIdentical` setting keeps applying).
 - [ ] Not yet verified live in the running app (Tauri window; shared tree/port with the
       other agent) — needs a `cargo tauri dev` session with real hubs plugged in.
 
+## Follow-up (2026-07-17): tree-view grouping + default collapse depth
+
+User feedback on the Connections view: identical siblings weren't grouped there at all
+(only the category view had grouping), and the tree started fully expanded.
+
+- `topology.ts`: `TopoNode.startCollapsed` — a node's children start hidden unless some
+  child is at the physical-plug level (`isPhysicalLevel`: `PCI\` or `USB\` without
+  `&MI_`). So controllers/hubs/devices show; composite-device interfaces and HID stacks
+  start collapsed. Also `groupTopoSiblings()`: identical-named siblings collapse into ×N
+  group rows, but only leaves/`startCollapsed` nodes are groupable — structural nodes
+  (hubs) never merge, so grouping can't hide plug topology. Keys `topo::<parent>::<name>`
+  share the store's `expandedGroups` signal.
+- Store: `collapsedTopoNodes` → `toggledTopoNodes` (set of nodes flipped from default);
+  `isTopoCollapsed(id)` → `isTopoToggled(id)`; collapsed = `startCollapsed !== toggled`.
+- `TopologyView.tsx`: renders sibling levels through `TopoRows`/`TopoGroup` (group row =
+  chevron + rep icon + name + ×N + problem badge; forced open when a member subtree has a
+  problem; grouping disabled under the problems filter since the tree is forced open).
+- `usb-tree.ts`/`UsbTreeRows.tsx`: same `startCollapsed` defaults applied to the USB
+  category's nested mode.
+- Committed as the follow-up commit after `71461d2` (see git log).
+
 ## Things not to do
 
 - Don't overwrite whole files — the other agent may have uncommitted hunks in

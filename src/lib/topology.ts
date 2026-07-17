@@ -10,6 +10,7 @@
  */
 
 import type { DeviceInfo } from './types';
+import { hasDeviceProblem } from './types';
 
 export interface TopoNode {
   device: DeviceInfo;
@@ -19,6 +20,13 @@ export interface TopoNode {
   /** Rendered de-emphasised — included only as context (e.g. an ancestor or
    *  sibling of a problem device while the problems filter is active). */
   dimmed: boolean;
+  /**
+   * Whether this node's children start hidden. The tree defaults to expanding
+   * only down to the physical-plug level (controllers, hubs, USB devices);
+   * everything inside a device — composite-device interfaces, HID stacks — is
+   * detail the user asks for by expanding.
+   */
+  startCollapsed: boolean;
 }
 
 /** Instance-ID prefixes considered in-scope for the USB + PCI topology. */
@@ -27,6 +35,23 @@ const RELEVANT_PREFIXES = ['PCI\\', 'USB\\', 'HID\\'];
 export function isTopologyRelevant(instanceId: string): boolean {
   const u = instanceId.toUpperCase();
   return RELEVANT_PREFIXES.some(p => u.startsWith(p));
+}
+
+/**
+ * True for nodes at the physical-plug level: PCI functions (controllers) and
+ * whole USB devices/hubs. False for everything inside a device — a composite
+ * device's interface functions (`USB\...&MI_xx`) and non-USB/PCI stacks (HID
+ * collections etc.). A node whose children are all below this level starts
+ * collapsed: the tree defaults to showing plugs, not device internals.
+ */
+export function isPhysicalLevel(instanceId: string): boolean {
+  const u = instanceId.toUpperCase();
+  return u.startsWith('PCI\\') || (u.startsWith('USB\\') && !u.includes('&MI_'));
+}
+
+/** Whether the node or anything in its subtree has a problem. */
+export function subtreeHasProblem(node: TopoNode): boolean {
+  return hasDeviceProblem(node.device.status) || node.children.some(subtreeHasProblem);
 }
 
 /**
@@ -82,7 +107,8 @@ export function buildTopologyForest(
 
     children.sort(byEldest);
     const descendantCount = children.reduce((n, c) => n + 1 + c.descendantCount, 0);
-    const node: TopoNode = { device, children, descendantCount, dimmed: dim(device) };
+    const startCollapsed = children.length > 0 && !children.some(c => isPhysicalLevel(c.device.instanceId));
+    const node: TopoNode = { device, children, descendantCount, dimmed: dim(device), startCollapsed };
     built.set(id, node);
     return node;
   };
@@ -102,4 +128,50 @@ export function buildTopologyForest(
 function byEldest(a: TopoNode, b: TopoNode): number {
   if (b.descendantCount !== a.descendantCount) return b.descendantCount - a.descendantCount;
   return a.device.name.localeCompare(b.device.name);
+}
+
+/** A renderable row within one sibling level of the topology tree. */
+export type TopoRow =
+  { kind: 'node'; key: string; node: TopoNode } | { kind: 'group'; key: string; name: string; nodes: TopoNode[] };
+
+/**
+ * Collapse runs of identically-named siblings into group rows, mirroring the
+ * category view's identical-device grouping.
+ *
+ * Only nodes whose subtree is hidden by default are groupable — leaves and
+ * `startCollapsed` nodes (device internals). Structural nodes that start
+ * expanded (hubs, controllers) never merge into a group, so grouping can't
+ * obscure the plug topology. Keys are scoped by the parent's instanceId so the
+ * same device name under two different hubs doesn't share expansion state.
+ */
+export function groupTopoSiblings(nodes: TopoNode[], parentId: string | null, enabled: boolean): TopoRow[] {
+  if (!enabled) return nodes.map(n => ({ kind: 'node', key: n.device.instanceId, node: n }));
+
+  const keyFor = (n: TopoNode) => `topo::${parentId ?? '^'}::${n.device.name}`;
+  const groupable = (n: TopoNode) => n.children.length === 0 || n.startCollapsed;
+
+  const counts = new Map<string, number>();
+  for (const n of nodes) {
+    if (!groupable(n)) continue;
+    const k = keyFor(n);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+
+  const rows: TopoRow[] = [];
+  const groups = new Map<string, Extract<TopoRow, { kind: 'group' }>>();
+  for (const n of nodes) {
+    const k = keyFor(n);
+    if (groupable(n) && (counts.get(k) ?? 0) >= 2) {
+      let group = groups.get(k);
+      if (!group) {
+        group = { kind: 'group', key: k, name: n.device.name, nodes: [] };
+        groups.set(k, group);
+        rows.push(group);
+      }
+      group.nodes.push(n);
+    } else {
+      rows.push({ kind: 'node', key: n.device.instanceId, node: n });
+    }
+  }
+  return rows;
 }

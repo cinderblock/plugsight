@@ -14,6 +14,7 @@
  */
 
 import type { DisplayDevice } from './types';
+import { isPhysicalLevel } from './topology';
 
 /** A renderable row in the nested USB view. */
 export type UsbRow =
@@ -25,6 +26,12 @@ export type UsbRow =
       children: UsbRow[];
       /** Members of the whole subtree, self included — drives visibility & counts. */
       subtree: DisplayDevice[];
+      /**
+       * Whether the children drawer starts hidden: true when every child is
+       * inside the device (interface functions) rather than a physical plug —
+       * same default depth as the Connections topology view.
+       */
+      startCollapsed: boolean;
     }
   | { kind: 'group'; key: string; name: string; isGhost: boolean; devices: DisplayDevice[] };
 
@@ -113,8 +120,10 @@ export function buildUsbRows(
     const groups = new Map<string, Extract<UsbRow, { kind: 'group' }>>();
     for (const d of siblings) {
       const id = d.device.instanceId;
-      if (childrenOf.has(id)) {
-        rows.push({ kind: 'node', key: id, device: d, children: rowsFor(id), subtree: subtreeOf(d) });
+      const kids = childrenOf.get(id);
+      if (kids) {
+        const startCollapsed = !kids.some(k => isPhysicalLevel(k.device.instanceId));
+        rows.push({ kind: 'node', key: id, device: d, children: rowsFor(id), subtree: subtreeOf(d), startCollapsed });
         continue;
       }
       const k = usbGroupKey(parentId, d.isGhost, d.device.name);
@@ -127,7 +136,7 @@ export function buildUsbRows(
         }
         group.devices.push(d);
       } else {
-        rows.push({ kind: 'node', key: id, device: d, children: [], subtree: [d] });
+        rows.push({ kind: 'node', key: id, device: d, children: [], subtree: [d], startCollapsed: false });
       }
     }
     return rows;

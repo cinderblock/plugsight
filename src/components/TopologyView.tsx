@@ -8,8 +8,9 @@
  */
 
 import type { Component } from 'solid-js';
-import { For, Show } from 'solid-js';
-import type { TopoNode } from '~/lib/topology';
+import { For, Show, Switch, Match } from 'solid-js';
+import type { TopoNode, TopoRow } from '~/lib/topology';
+import { groupTopoSiblings, subtreeHasProblem } from '~/lib/topology';
 import { hasDeviceProblem } from '~/lib/types';
 import {
   state,
@@ -18,20 +19,29 @@ import {
   setSelectedId,
   recentChanges,
   setHoveredId,
-  isTopoCollapsed,
+  isTopoToggled,
   toggleTopoNode,
   showProblemsOnly,
+  groupIdentical,
+  isGroupExpanded,
+  toggleGroup,
 } from '~/lib/device-store';
 import { openDeviceProperties } from '~/lib/tauri';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
 import RelationArrows from './RelationArrows';
 
+/** Whether identical-sibling grouping applies (off under the problems filter,
+ *  where the tree is forced open and dimmed-context rows would mislead). */
+const groupingOn = () => groupIdentical() && !showProblemsOnly();
+
 const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
   const device = () => props.node.device;
   const hasChildren = () => props.node.children.length > 0;
-  // Force the tree open under the problems filter so the matching devices show.
-  const collapsed = () => !showProblemsOnly() && isTopoCollapsed(device().instanceId);
+  // Default depth comes from startCollapsed (expanded down to the physical-plug
+  // level); a user toggle flips it. Forced open under the problems filter so
+  // the matching devices show.
+  const collapsed = () => !showProblemsOnly() && props.node.startCollapsed !== isTopoToggled(device().instanceId);
   const isSelected = () => selectedId() === device().instanceId;
   const isRecentChange = () => recentChanges().has(device().instanceId);
   const hasProblem = () => hasDeviceProblem(device().status);
@@ -118,13 +128,93 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
         <span data-role="label-end" aria-hidden="true" />
       </div>
 
-      {/* Children */}
+      {/* Children — identical siblings collapse into group rows */}
       <Show when={hasChildren() && !collapsed()}>
-        <For each={props.node.children}>{child => <TopologyNode node={child} depth={props.depth + 1} />}</For>
+        <TopoRows
+          rows={groupTopoSiblings(props.node.children, device().instanceId, groupingOn())}
+          depth={props.depth + 1}
+        />
       </Show>
     </div>
   );
 };
+
+/**
+ * A collapsed run of identically-named siblings. Expanded, each member renders
+ * as a full TopologyNode (with its own subtree). Forced open while any member's
+ * subtree has a problem, so a group never hides something that needs attention.
+ */
+const TopoGroup: Component<{ group: Extract<TopoRow, { kind: 'group' }>; depth: number }> = props => {
+  const rep = () => props.group.nodes[0].device;
+  const problemCount = () => props.group.nodes.filter(subtreeHasProblem).length;
+  const expanded = () => problemCount() > 0 || isGroupExpanded(props.group.key);
+
+  return (
+    <div>
+      <div
+        class="group flex items-center gap-2 pr-2 py-1 border-l-4 border-l-transparent rounded-r-lg cursor-pointer transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+        style={{ 'padding-left': `${props.depth * 16 + 8}px` }}
+        data-arrow-row
+        onClick={() => toggleGroup(props.group.key)}
+      >
+        {/* Expand/collapse chevron */}
+        <div class="w-4 h-4 shrink-0 flex items-center justify-center text-gray-400 dark:text-gray-500">
+          <svg
+            class={`w-4 h-4 transition-transform duration-200 ${expanded() ? 'rotate-90' : ''}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </div>
+
+        {/* Representative icon (all members share a name, and virtually always a class) */}
+        <div data-role="icon" class="shrink-0 text-gray-600 dark:text-gray-400">
+          <DeviceIcon iconId={rep().iconId || 'other'} classGuid={rep().classGuid} class="w-5 h-5" />
+        </div>
+
+        {/* Shared name */}
+        <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{props.group.name}</span>
+
+        {/* ×N member count */}
+        <span class="shrink-0 inline-flex items-center h-5 px-1.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 tabular-nums">
+          ×{props.group.nodes.length}
+        </span>
+
+        {/* Problem count badge */}
+        <Show when={problemCount() > 0}>
+          <span class="shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
+            {problemCount()}
+          </span>
+        </Show>
+
+        {/* Zero-width marker at the end of the label, for relation connectors. */}
+        <span data-role="label-end" aria-hidden="true" />
+      </div>
+
+      {/* Members, each with its own subtree */}
+      <Show when={expanded()}>
+        <For each={props.group.nodes}>{node => <TopologyNode node={node} depth={props.depth + 1} />}</For>
+      </Show>
+    </div>
+  );
+};
+
+/** One sibling level: individual nodes interleaved with identical-run groups. */
+const TopoRows: Component<{ rows: TopoRow[]; depth: number }> = props => (
+  <For each={props.rows}>
+    {row => (
+      <Switch>
+        <Match when={row.kind === 'node' ? row : null}>
+          {r => <TopologyNode node={r().node} depth={props.depth} />}
+        </Match>
+        <Match when={row.kind === 'group' ? row : null}>{r => <TopoGroup group={r()} depth={props.depth} />}</Match>
+      </Switch>
+    )}
+  </For>
+);
 
 const TopologyView: Component = () => {
   let containerRef!: HTMLDivElement;
@@ -148,8 +238,8 @@ const TopologyView: Component = () => {
         </div>
       </Show>
 
-      {/* Topology forest */}
-      <For each={topologyForest()}>{root => <TopologyNode node={root} depth={0} />}</For>
+      {/* Topology forest — root siblings group like any other level */}
+      <TopoRows rows={groupTopoSiblings(topologyForest(), null, groupingOn())} depth={0} />
 
       {/* Hover relationship connectors (overlay) */}
       <RelationArrows container={() => containerRef} />

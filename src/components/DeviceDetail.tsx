@@ -12,6 +12,7 @@ import { openDeviceProperties } from '~/lib/tauri';
 import { statusLabel, hasDeviceProblem } from '~/lib/types';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
+import Tooltip from './Tooltip';
 
 const DeviceDetail: Component = () => {
   const sel = selectedDevice;
@@ -39,45 +40,47 @@ const DeviceDetail: Component = () => {
           <div class={`h-full overflow-y-auto p-4 ${isGhost() ? 'opacity-60' : ''}`}>
             {/* Action buttons */}
             <div class="flex justify-end gap-1 mb-2">
-              <button
-                class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                onClick={() => openDeviceProperties(device().instanceId)}
-                title="Open Windows properties"
-              >
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                  <polyline points="15 3 21 3 21 9" />
-                  <line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
-              </button>
-              <button
-                class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                onClick={() => setSelectedId(null)}
-                title="Close"
-              >
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
+              <Tooltip text="Open Windows properties" align="right">
+                <button
+                  class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  aria-label="Open Windows properties"
+                  onClick={() => openDeviceProperties(device().instanceId)}
+                >
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                </button>
+              </Tooltip>
+              <Tooltip text="Close" align="right">
+                <button
+                  class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  aria-label="Close"
+                  onClick={() => setSelectedId(null)}
+                >
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </Tooltip>
             </div>
 
             {/* Device header */}
             <div class="flex items-start gap-3 mb-4">
-              <div class={`shrink-0 p-2 rounded-lg ${
-                hasDeviceProblem(device().status)
-                  ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-              }`}>
+              <div
+                class={`shrink-0 p-2 rounded-lg ${
+                  hasDeviceProblem(device().status)
+                    ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                }`}
+              >
                 <DeviceIcon iconId={iconId()} classGuid={device().classGuid} class="w-8 h-8" />
               </div>
               <div class="min-w-0">
-                <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100 leading-snug">
-                  {device().name}
-                </h2>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {device().className}
-                </p>
+                <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100 leading-snug">{device().name}</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{device().className}</p>
               </div>
             </div>
 
@@ -100,15 +103,11 @@ const DeviceDetail: Component = () => {
               <div class="flex items-center gap-2">
                 <StatusBadge status={device().status} />
                 <Show when={device().status.kind === 'ok'}>
-                  <span class="text-sm text-green-600 dark:text-green-400 font-medium">
-                    Working properly
-                  </span>
+                  <span class="text-sm text-green-600 dark:text-green-400 font-medium">Working properly</span>
                 </Show>
               </div>
               <Show when={hasDeviceProblem(device().status)}>
-                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                  {statusLabel(device().status)}
-                </p>
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{statusLabel(device().status)}</p>
               </Show>
             </div>
 
@@ -153,9 +152,7 @@ const DeviceDetail: Component = () => {
 /** A single label-value row in the detail panel. */
 const DetailRow: Component<{ label: string; value: string; mono?: boolean }> = props => (
   <div>
-    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-      {props.label}
-    </span>
+    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{props.label}</span>
     <p
       class={`text-sm mt-0.5 break-words ${
         props.mono

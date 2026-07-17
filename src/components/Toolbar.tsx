@@ -4,7 +4,7 @@
  * Device counts and version info are shown in the StatusBar (footer) instead.
  */
 
-import type { Component, JSX } from 'solid-js';
+import type { Component } from 'solid-js';
 import { Show, createSignal } from 'solid-js';
 import {
   searchQuery,
@@ -31,6 +31,7 @@ import {
   type LinkMode,
 } from '~/lib/device-store';
 import { scanForHardwareChanges } from '~/lib/tauri';
+import Tooltip from './Tooltip';
 
 /** Human-readable labels for each density level. */
 const DENSITY_LABELS: Record<DensityLevel, string> = {
@@ -330,33 +331,6 @@ const LinkModeIcon: Component<{ mode: LinkMode }> = props => (
       <line x1="4" y1="4" x2="20" y2="20" />
     </Show>
   </svg>
-);
-
-/**
- * A floating label shown on hover or keyboard focus — a real element, not a
- * `title=` attribute (those are invisible on touch and bury the text behind a
- * hover). It's `aria-hidden` and purely visual: the trigger keeps its own
- * `aria-label`, so screen readers aren't told the same thing twice. Appears
- * after a short hover delay (so brushing past a button doesn't flash it) but
- * fades out immediately on leave; focus shows it with no delay.
- *
- * Pass `align="right"` for triggers near the window's right edge so the label
- * grows leftward instead of clipping off-screen.
- */
-const Tooltip: Component<{ text: string; align?: 'center' | 'right'; children: JSX.Element }> = props => (
-  <span class="group/tt relative inline-flex">
-    {props.children}
-    <span
-      aria-hidden="true"
-      class="pointer-events-none absolute top-full z-50 mt-2 w-max max-w-[15rem] whitespace-normal rounded-md bg-gray-900/95 px-2 py-1 text-center text-xs font-medium leading-snug text-white opacity-0 shadow-lg ring-1 ring-black/5 transition-opacity delay-0 duration-150 group-hover/tt:opacity-100 group-hover/tt:delay-300 group-focus-within/tt:opacity-100 dark:bg-gray-700/95"
-      classList={{
-        'left-1/2 -translate-x-1/2': props.align !== 'right',
-        'right-0': props.align === 'right',
-      }}
-    >
-      {props.text}
-    </span>
-  </span>
 );
 
 /** A small toolbar icon button. Pass `loading` to spin the icon and disable the button. */

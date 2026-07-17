@@ -9,6 +9,7 @@
 import type { Component } from 'solid-js';
 import { Show, Switch, Match } from 'solid-js';
 import type { DeviceStatus } from '~/lib/types';
+import Tooltip from './Tooltip';
 
 interface StatusBadgeProps {
   status: DeviceStatus;
@@ -25,82 +26,78 @@ const StatusBadge: Component<StatusBadgeProps> = props => {
       </Match>
 
       <Match when={props.status.kind === 'error'}>
-        <div
-          class={`inline-flex items-center gap-1.5 rounded-md font-medium ${
-            props.compact
-              ? 'px-1.5 py-0.5 text-xs'
-              : 'px-2 py-1 text-sm'
-          } bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300`}
-          title={(props.status as { message: string }).message}
-        >
-          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <Show when={!props.compact}>
-            <span class="truncate">Error</span>
-          </Show>
-        </div>
+        <Tooltip text={(props.status as { message: string }).message}>
+          <div
+            class={`inline-flex items-center gap-1.5 rounded-md font-medium ${
+              props.compact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-sm'
+            } bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300`}
+          >
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <Show when={!props.compact}>
+              <span class="truncate">Error</span>
+            </Show>
+          </div>
+        </Tooltip>
       </Match>
 
       <Match when={props.status.kind === 'warning'}>
-        <div
-          class={`inline-flex items-center gap-1.5 rounded-md font-medium ${
-            props.compact
-              ? 'px-1.5 py-0.5 text-xs'
-              : 'px-2 py-1 text-sm'
-          } bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300`}
-          title={(props.status as { message: string }).message}
-        >
-          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-          <Show when={!props.compact}>
-            <span class="truncate">Warning</span>
-          </Show>
-        </div>
+        <Tooltip text={(props.status as { message: string }).message}>
+          <div
+            class={`inline-flex items-center gap-1.5 rounded-md font-medium ${
+              props.compact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-sm'
+            } bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300`}
+          >
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <Show when={!props.compact}>
+              <span class="truncate">Warning</span>
+            </Show>
+          </div>
+        </Tooltip>
       </Match>
 
       <Match when={props.status.kind === 'disabled'}>
-        <div
-          class={`inline-flex items-center gap-1.5 rounded-md font-medium ${
-            props.compact
-              ? 'px-1.5 py-0.5 text-xs'
-              : 'px-2 py-1 text-sm'
-          } bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400`}
-          title="This device is disabled"
-        >
-          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-          </svg>
-          <Show when={!props.compact}>
-            <span>Disabled</span>
-          </Show>
-        </div>
+        <Tooltip text="This device is disabled">
+          <div
+            class={`inline-flex items-center gap-1.5 rounded-md font-medium ${
+              props.compact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-sm'
+            } bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400`}
+          >
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+            </svg>
+            <Show when={!props.compact}>
+              <span>Disabled</span>
+            </Show>
+          </div>
+        </Tooltip>
       </Match>
 
       <Match when={props.status.kind === 'driverNotInstalled'}>
-        <div
-          class={`inline-flex items-center gap-1.5 rounded-md font-medium ${
-            props.compact
-              ? 'px-1.5 py-0.5 text-xs'
-              : 'px-2 py-1 text-sm'
-          } bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300`}
-          title="No driver installed for this device"
-        >
-          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-          <Show when={!props.compact}>
-            <span class="truncate">No driver</span>
-          </Show>
-        </div>
+        <Tooltip text="No driver installed for this device">
+          <div
+            class={`inline-flex items-center gap-1.5 rounded-md font-medium ${
+              props.compact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-sm'
+            } bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300`}
+          >
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <Show when={!props.compact}>
+              <span class="truncate">No driver</span>
+            </Show>
+          </div>
+        </Tooltip>
       </Match>
     </Switch>
   );

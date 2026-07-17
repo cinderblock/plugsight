@@ -19,6 +19,7 @@ import {
   openReleasePage,
   installUpdate,
 } from '~/lib/updater';
+import Tooltip from './Tooltip';
 
 const StatusBar: Component = () => {
   return (
@@ -39,22 +40,25 @@ const StatusBar: Component = () => {
           <div class="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 tabular-nums">
             <span>{counts().total} devices</span>
             <Show when={counts().problems > 0}>
-              <button
-                class={`font-medium cursor-pointer transition-colors rounded px-1.5 py-0.5 -my-0.5 ${
-                  showProblemsOnly()
-                    ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
-                    : 'text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30'
-                }`}
-                onClick={() => setShowProblemsOnly(prev => !prev)}
-                title={showProblemsOnly() ? 'Show all devices' : 'Show only problem devices'}
+              <Tooltip
+                text={showProblemsOnly() ? 'Show all devices' : 'Show only problem devices'}
+                placement="top"
+                align="right"
               >
-                {counts().problems} problem{counts().problems !== 1 ? 's' : ''}
-              </button>
+                <button
+                  class={`font-medium cursor-pointer transition-colors rounded px-1.5 py-0.5 -my-0.5 ${
+                    showProblemsOnly()
+                      ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+                      : 'text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30'
+                  }`}
+                  onClick={() => setShowProblemsOnly(prev => !prev)}
+                >
+                  {counts().problems} problem{counts().problems !== 1 ? 's' : ''}
+                </button>
+              </Tooltip>
             </Show>
             <Show when={counts().ghosts > 0}>
-              <span class="italic">
-                {counts().ghosts} removed
-              </span>
+              <span class="italic">{counts().ghosts} removed</span>
             </Show>
           </div>
         </Show>
@@ -64,63 +68,79 @@ const StatusBar: Component = () => {
           {/* Active download/install in progress */}
           <Match when={updateProgress()}>
             {progress => (
-              <div
-                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
-                title={
+              <Tooltip
+                text={
                   progress().phase === 'downloading'
                     ? `Downloading... ${progress().percent != null ? progress().percent + '%' : ''}`
                     : progress().phase === 'installing'
                       ? 'Installing...'
                       : 'Done'
                 }
+                placement="top"
+                align="right"
               >
-                {/* Spinner */}
-                <svg class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                <Show
-                  when={progress().phase === 'downloading'}
-                  fallback={<span>Installing...</span>}
-                >
-                  <span>
-                    {progress().percent != null ? `${progress().percent}%` : 'Downloading...'}
-                  </span>
-                </Show>
-              </div>
+                <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                  {/* Spinner */}
+                  <svg class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <Show when={progress().phase === 'downloading'} fallback={<span>Installing...</span>}>
+                    <span>{progress().percent != null ? `${progress().percent}%` : 'Downloading...'}</span>
+                  </Show>
+                </div>
+              </Tooltip>
             )}
           </Match>
 
           {/* Update available — auto-install button (installed builds) */}
           <Match when={updateAvailable() && canAutoUpdate()}>
-            <button
-              class="update-badge inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors cursor-pointer"
-              onClick={installUpdate}
-              title={`Update to ${latestVersion()} (click to install)`}
-            >
-              {/* Download icon */}
-              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 5v14" />
-                <polyline points="19 12 12 19 5 12" />
-              </svg>
-              <span>Update {latestVersion()}</span>
-            </button>
+            <Tooltip text={`Update to ${latestVersion()} (click to install)`} placement="top" align="right">
+              <button
+                class="update-badge inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors cursor-pointer"
+                onClick={installUpdate}
+              >
+                {/* Download icon */}
+                <svg
+                  class="w-3.5 h-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 5v14" />
+                  <polyline points="19 12 12 19 5 12" />
+                </svg>
+                <span>Update {latestVersion()}</span>
+              </button>
+            </Tooltip>
           </Match>
 
           {/* Update available — open release page (portable builds) */}
           <Match when={updateAvailable() && !canAutoUpdate()}>
-            <button
-              class="update-badge inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors cursor-pointer"
-              onClick={openReleasePage}
-              title={`Update available: ${latestVersion()} (click to download)`}
-            >
-              {/* External link icon */}
-              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 5v14" />
-                <polyline points="19 12 12 19 5 12" />
-              </svg>
-              <span>{latestVersion()}</span>
-            </button>
+            <Tooltip text={`Update available: ${latestVersion()} (click to download)`} placement="top" align="right">
+              <button
+                class="update-badge inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors cursor-pointer"
+                onClick={openReleasePage}
+              >
+                {/* External link icon */}
+                <svg
+                  class="w-3.5 h-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 5v14" />
+                  <polyline points="19 12 12 19 5 12" />
+                </svg>
+                <span>{latestVersion()}</span>
+              </button>
+            </Tooltip>
           </Match>
         </Switch>
       </div>

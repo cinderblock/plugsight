@@ -4,7 +4,7 @@
  * Device counts and version info are shown in the StatusBar (footer) instead.
  */
 
-import type { Component } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import { Show, createSignal } from 'solid-js';
 import {
   searchQuery,
@@ -198,17 +198,19 @@ const Toolbar: Component = () => {
 
         <Show when={hasActiveFilters()}>
           <div class="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
-          <button
-            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50 transition-colors cursor-pointer"
-            aria-label="Clear all filters (search, hidden items, problems only)"
-            onClick={clearAllFilters}
-          >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-            Clear filters
-          </button>
+          <Tooltip text="Clear all filters (search, hidden items, problems only)">
+            <button
+              class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50 transition-colors cursor-pointer"
+              aria-label="Clear all filters (search, hidden items, problems only)"
+              onClick={clearAllFilters}
+            >
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+              Clear filters
+            </button>
+          </Tooltip>
         </Show>
 
         <Show when={counts().ghosts > 0}>
@@ -229,16 +231,18 @@ const Toolbar: Component = () => {
       {/* Ghost timeout selector — pinned to the right edge. */}
       <div class="ml-auto flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
         {/* Clock icon — click to clear all ghost devices */}
-        <button
-          class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
-          aria-label="Clear all removed devices"
-          onClick={clearAllGhosts}
-        >
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
-        </button>
+        <Tooltip text="Clear all removed devices" align="right">
+          <button
+            class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+            aria-label="Clear all removed devices"
+            onClick={clearAllGhosts}
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </button>
+        </Tooltip>
         <label>
           <select
             value={ghostTimeoutMs()}
@@ -328,30 +332,61 @@ const LinkModeIcon: Component<{ mode: LinkMode }> = props => (
   </svg>
 );
 
+/**
+ * A floating label shown on hover or keyboard focus — a real element, not a
+ * `title=` attribute (those are invisible on touch and bury the text behind a
+ * hover). It's `aria-hidden` and purely visual: the trigger keeps its own
+ * `aria-label`, so screen readers aren't told the same thing twice. Appears
+ * after a short hover delay (so brushing past a button doesn't flash it) but
+ * fades out immediately on leave; focus shows it with no delay.
+ *
+ * Pass `align="right"` for triggers near the window's right edge so the label
+ * grows leftward instead of clipping off-screen.
+ */
+const Tooltip: Component<{ text: string; align?: 'center' | 'right'; children: JSX.Element }> = props => (
+  <span class="group/tt relative inline-flex">
+    {props.children}
+    <span
+      aria-hidden="true"
+      class="pointer-events-none absolute top-full z-50 mt-2 w-max max-w-[15rem] whitespace-normal rounded-md bg-gray-900/95 px-2 py-1 text-center text-xs font-medium leading-snug text-white opacity-0 shadow-lg ring-1 ring-black/5 transition-opacity delay-0 duration-150 group-hover/tt:opacity-100 group-hover/tt:delay-300 group-focus-within/tt:opacity-100 dark:bg-gray-700/95"
+      classList={{
+        'left-1/2 -translate-x-1/2': props.align !== 'right',
+        'right-0': props.align === 'right',
+      }}
+    >
+      {props.text}
+    </span>
+  </span>
+);
+
 /** A small toolbar icon button. Pass `loading` to spin the icon and disable the button. */
 const ToolbarButton: Component<{
-  /** Accessible name (screen readers only — no tooltips; the icon carries the meaning). */
+  /** Doubles as the button's `aria-label` and its hover/focus tooltip text. */
   label: string;
   onClick: () => void;
   icon: any;
   loading?: boolean;
   /** Render in an "active/on" highlighted state (for toggle buttons). */
   active?: boolean;
+  /** Tooltip alignment; use 'right' near the right edge to avoid clipping. */
+  align?: 'center' | 'right';
 }> = props => (
-  <button
-    class="p-1.5 rounded-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-    classList={{
-      'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/50':
-        props.active,
-      'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200':
-        !props.active,
-    }}
-    aria-label={props.label}
-    onClick={props.onClick}
-    disabled={props.loading}
-  >
-    <div classList={{ 'animate-spin': !!props.loading }}>{props.icon}</div>
-  </button>
+  <Tooltip text={props.label} align={props.align}>
+    <button
+      class="p-1.5 rounded-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+      classList={{
+        'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/50':
+          props.active,
+        'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200':
+          !props.active,
+      }}
+      aria-label={props.label}
+      onClick={props.onClick}
+      disabled={props.loading}
+    >
+      <div classList={{ 'animate-spin': !!props.loading }}>{props.icon}</div>
+    </button>
+  </Tooltip>
 );
 
 export default Toolbar;

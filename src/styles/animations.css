@@ -168,6 +168,39 @@
   animation: update-badge-in 400ms ease-out;
 }
 
+/* ── Device-change toasts ───────────────────────────────────────────── */
+/* Slide/fade in from the right, collapse away on exit. Applied by the
+   <TransitionGroup name="toast"> in ToastHost. */
+
+.toast-enter {
+  opacity: 0;
+  transform: translateX(16px);
+}
+
+.toast-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity 250ms ease-out,
+    transform 250ms ease-out;
+}
+
+.toast-exit {
+  opacity: 1;
+}
+
+.toast-exit-active {
+  opacity: 0;
+  transform: translateX(16px);
+  transition:
+    opacity 200ms ease-in,
+    transform 200ms ease-in;
+}
+
+.toast-move {
+  transition: transform 250ms ease-out;
+}
+
 /* ── Loading spinner ────────────────────────────────────────────────── */
 
 @keyframes spin {

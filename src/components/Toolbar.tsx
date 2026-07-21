@@ -29,7 +29,10 @@ import {
   linkMode,
   cycleLinkMode,
   type LinkMode,
+  notifyMode,
+  cycleNotifyMode,
 } from '~/lib/device-store';
+import type { NotifyMode } from '~/lib/notifications';
 import { scanForHardwareChanges } from '~/lib/tauri';
 import Tooltip from './Tooltip';
 
@@ -52,6 +55,13 @@ const LINK_MODE_LABELS: Record<LinkMode, string> = {
   all: 'shown for selected and hovered devices',
   selected: 'shown for the selected device only',
   none: 'hidden',
+};
+
+/** Tooltip description for each notification mode. */
+const NOTIFY_MODE_LABELS: Record<NotifyMode, string> = {
+  off: 'off',
+  com: 'COM/serial ports only',
+  all: 'all device changes',
 };
 
 /** Presets for the ghost timeout selector (ms). 0 = keep indefinitely. */
@@ -181,6 +191,13 @@ const Toolbar: Component = () => {
           label={`Parent/child link arrows: ${LINK_MODE_LABELS[linkMode()]}`}
           onClick={cycleLinkMode}
           icon={<LinkModeIcon mode={linkMode()} />}
+        />
+
+        <ToolbarButton
+          label={`Plug-in notifications: ${NOTIFY_MODE_LABELS[notifyMode()]}`}
+          active={notifyMode() !== 'off'}
+          onClick={cycleNotifyMode}
+          icon={<NotifyIcon mode={notifyMode()} />}
         />
 
         <div class="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
@@ -329,6 +346,31 @@ const LinkModeIcon: Component<{ mode: LinkMode }> = props => (
     </Show>
     <Show when={props.mode === 'none'}>
       <line x1="4" y1="4" x2="20" y2="20" />
+    </Show>
+  </svg>
+);
+
+/**
+ * A bell whose state reflects the notification mode: struck-through when off, a
+ * plain bell for COM-only, and a bell with a filled "all" dot for every device.
+ */
+const NotifyIcon: Component<{ mode: NotifyMode }> = props => (
+  <svg
+    class="w-4 h-4"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 01-3.46 0" />
+    <Show when={props.mode === 'all'}>
+      <circle cx="18" cy="5" r="3" fill="currentColor" stroke="none" />
+    </Show>
+    <Show when={props.mode === 'off'}>
+      <line x1="3" y1="3" x2="21" y2="21" />
     </Show>
   </svg>
 );

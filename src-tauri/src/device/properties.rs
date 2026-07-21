@@ -5,7 +5,9 @@
 
 use windows::Win32::Devices::DeviceAndDriverInstallation::*;
 use windows::Win32::Devices::Properties::*;
-use windows::core::GUID;
+use windows::Win32::Foundation::ERROR_SUCCESS;
+use windows::Win32::System::Registry::{KEY_READ, REG_VALUE_TYPE, RegCloseKey, RegQueryValueExW};
+use windows::core::{GUID, w};
 
 use super::types::DeviceStatus;
 
@@ -312,6 +314,64 @@ pub fn get_hardware_ids(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> Vec<S
 
 pub fn get_parent_id(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> String {
     get_string_property(dev_info, dev_data, &DEVPKEY_DEVICE_PARENT).unwrap_or_default()
+}
+
+/// Read the serial/parallel port name (e.g. `"COM5"`, `"LPT1"`) from the
+/// device's hardware registry key (`DIREG_DEV` → `PortName`). This is the
+/// canonical source Device Manager itself uses; the friendly-name suffix like
+/// `"(COM5)"` isn't always present. Returns `None` for devices without a
+/// `PortName` value (i.e. anything that isn't a COM/LPT port).
+pub fn get_port_name(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> Option<String> {
+    unsafe {
+        let hkey = SetupDiOpenDevRegKey(
+            dev_info,
+            dev_data,
+            DICS_FLAG_GLOBAL.0,
+            0,
+            DIREG_DEV,
+            KEY_READ.0,
+        )
+        .ok()?;
+
+        // First query the size, then the value.
+        let mut data_type = REG_VALUE_TYPE(0);
+        let mut size: u32 = 0;
+        let _ = RegQueryValueExW(
+            hkey,
+            w!("PortName"),
+            None,
+            Some(&mut data_type),
+            None,
+            Some(&mut size),
+        );
+
+        if size == 0 {
+            let _ = RegCloseKey(hkey);
+            return None;
+        }
+
+        let mut buffer = vec![0u8; size as usize];
+        let rc = RegQueryValueExW(
+            hkey,
+            w!("PortName"),
+            None,
+            Some(&mut data_type),
+            Some(buffer.as_mut_ptr()),
+            Some(&mut size),
+        );
+        let _ = RegCloseKey(hkey);
+
+        if rc != ERROR_SUCCESS {
+            return None;
+        }
+
+        // Value is UTF-16LE, null-terminated.
+        let wide: &[u16] =
+            std::slice::from_raw_parts(buffer.as_ptr() as *const u16, (size as usize) / 2);
+        let len = wide.iter().position(|&c| c == 0).unwrap_or(wide.len());
+        let name = String::from_utf16_lossy(&wide[..len]);
+        if name.is_empty() { None } else { Some(name) }
+    }
 }
 
 pub fn get_problem_code(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> u32 {

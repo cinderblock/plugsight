@@ -10,6 +10,10 @@ use super::class_meta;
 use super::properties;
 use super::types::DeviceInfo;
 
+/// Class GUID of "Ports (COM & LPT)" — the only class whose devices carry a
+/// `PortName` registry value, so we only pay the extra registry read for these.
+const PORTS_CLASS_GUID: &str = "{4d36e978-e325-11ce-bfc1-08002be10318}";
+
 /// Enumerate all present devices in the system.
 ///
 /// Calls `SetupDiGetClassDevsW` with `DIGCF_ALLCLASSES | DIGCF_PRESENT` and iterates
@@ -119,6 +123,14 @@ fn build_device_info(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> Option<D
     let parent_id = properties::get_parent_id(dev_info, dev_data);
     let (status, problem_code) = properties::derive_device_status(dev_info, dev_data);
 
+    // Only Ports-class devices carry a PortName (COM5 / LPT1); skip the extra
+    // registry read for every other device.
+    let port_name = if class_guid.eq_ignore_ascii_case(PORTS_CLASS_GUID) {
+        properties::get_port_name(dev_info, dev_data)
+    } else {
+        None
+    };
+
     // Resolve the canonical class name + icon ID from our known-class table,
     // falling back to the SetupAPI-provided name for unknown GUIDs.
     let meta = class_meta::lookup_class(&class_guid, &class_name_hint);
@@ -136,6 +148,7 @@ fn build_device_info(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> Option<D
         problem_code,
         hardware_ids,
         parent_id,
+        port_name,
         is_present: true,
     })
 }

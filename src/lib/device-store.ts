@@ -16,6 +16,7 @@ import { hasDeviceProblem } from './types';
 import { onDeviceEvent, getAllDevices } from './tauri';
 import { loadClassIcons } from './icon-cache';
 import { buildTopologyForest, type TopoNode } from './topology';
+import { notifyDeviceChange, NOTIFY_MODE_ORDER, type NotifyMode } from './notifications';
 
 // ── Configuration ─────────────────────────────────────────────────────────
 
@@ -96,6 +97,8 @@ interface PersistedState {
   usbNesting: boolean;
   /** Which parent/child relation arrows are drawn. */
   linkMode: LinkMode;
+  /** Which device changes raise a "COM5 connected" popup. */
+  notifyMode: NotifyMode;
 }
 
 function loadPersistedState(): Partial<PersistedState> {
@@ -131,6 +134,11 @@ const [linkMode, setLinkMode] = createSignal<LinkMode>(
 );
 const [viewMode, setViewMode] = createSignal<ViewMode>(
   _saved.viewMode === 'connections' ? 'connections' : 'categories',
+);
+const [notifyMode, setNotifyMode] = createSignal<NotifyMode>(
+  // Same localStorage-garbage guard as density/linkMode. Defaults to 'com' so
+  // serial-port popups work out of the box.
+  NOTIFY_MODE_ORDER.includes(_saved.notifyMode as NotifyMode) ? (_saved.notifyMode as NotifyMode) : 'com',
 );
 /**
  * Topology nodes whose expand/collapse state the user has flipped away from its
@@ -213,6 +221,7 @@ function handleDeviceAdded(device: DeviceInfo) {
     if (state.enumerationComplete) {
       markRecentChange(device.instanceId);
       markRecentAdd(device.classGuid);
+      maybeNotify(device, 'connected');
     }
   });
 }
@@ -248,6 +257,9 @@ function handleDeviceRemoved(instanceId: string) {
 
     // Track recent remove for category pill.
     markRecentRemove(classGuid);
+
+    // Raise a popup (subject to notifyMode). Uses the pre-deletion `device`.
+    maybeNotify(device, 'disconnected');
   });
 }
 
@@ -256,6 +268,32 @@ function handleDeviceUpdated(device: DeviceInfo) {
     setState('devices', device.instanceId, device);
     markRecentChange(device.instanceId);
   });
+}
+
+/** A device is a serial/parallel port if the backend gave it a COM/LPT name. */
+function isComPort(device: DeviceInfo): boolean {
+  return !!device.portName && /^COM\d+$/i.test(device.portName);
+}
+
+/**
+ * Raise a "COM5 connected"/"disconnected" popup for a device change, subject to
+ * the user's `notifyMode` setting. Never fires during the initial enumeration
+ * (the backend streams every existing device as an "added" event on startup).
+ */
+function maybeNotify(device: DeviceInfo, direction: 'connected' | 'disconnected') {
+  if (!state.enumerationComplete) return;
+
+  const mode = notifyMode();
+  if (mode === 'off') return;
+
+  const com = isComPort(device);
+  if (mode === 'com' && !com) return;
+
+  const notice = com
+    ? { title: `${device.portName} ${direction}`, body: device.name }
+    : { title: device.name, body: direction === 'connected' ? 'Connected' : 'Disconnected' };
+
+  void notifyDeviceChange({ ...notice, direction, instanceId: device.instanceId });
 }
 
 function markRecentChange(instanceId: string) {
@@ -613,6 +651,12 @@ function cycleLinkMode() {
   setLinkMode(LINK_MODE_ORDER[(idx + 1) % LINK_MODE_ORDER.length]);
 }
 
+/** Advance to the next notification mode (off → COM → all), wrapping around. */
+function cycleNotifyMode() {
+  const idx = NOTIFY_MODE_ORDER.indexOf(notifyMode());
+  setNotifyMode(NOTIFY_MODE_ORDER[(idx + 1) % NOTIFY_MODE_ORDER.length]);
+}
+
 /** Flip one topology node's expand/collapse state away from (or back to) its default. */
 function toggleTopoNode(instanceId: string) {
   setToggledTopoNodes(prev => {
@@ -762,6 +806,7 @@ function initDeviceStore() {
       viewMode: viewMode(),
       usbNesting: usbNesting(),
       linkMode: linkMode(),
+      notifyMode: notifyMode(),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
@@ -808,6 +853,7 @@ export {
   isGroupExpanded,
   viewMode,
   linkMode,
+  notifyMode,
   topologyForest,
   isTopoToggled,
   hasActiveFilters,
@@ -828,6 +874,7 @@ export {
   toggleGroup,
   toggleViewMode,
   cycleLinkMode,
+  cycleNotifyMode,
   toggleTopoNode,
   dismissGhost,
   clearAllGhosts,

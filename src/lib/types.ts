@@ -14,6 +14,8 @@ export interface DeviceInfo {
   problemCode: number;
   hardwareIds: string[];
   parentId: string;
+  /** Serial/parallel port name (e.g. "COM5", "LPT1") for Ports-class devices; null otherwise. */
+  portName: string | null;
   isPresent: boolean;
 }
 

@@ -35,6 +35,9 @@ pub struct DeviceInfo {
     pub hardware_ids: Vec<String>,
     /// Instance ID of the parent device.
     pub parent_id: String,
+    /// Serial/parallel port name (e.g. "COM5", "LPT1") for devices in the
+    /// Ports (COM & LPT) class; `None` for everything else.
+    pub port_name: Option<String>,
     /// Whether this device is currently present (connected).
     pub is_present: bool,
 }

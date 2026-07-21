@@ -13,6 +13,7 @@ import DeviceTree from '~/components/DeviceTree';
 import TopologyView from '~/components/TopologyView';
 import DeviceDetail from '~/components/DeviceDetail';
 import StatusBar from '~/components/StatusBar';
+import ToastHost from '~/components/ToastHost';
 
 const App: Component = () => {
   // Wire up the device event listener and ghost sweeper.
@@ -52,6 +53,9 @@ const App: Component = () => {
 
       {/* Bottom status bar: version, counts, update badge */}
       <StatusBar />
+
+      {/* Device-change popups (in-app toasts when focused) */}
+      <ToastHost />
     </div>
   );
 };

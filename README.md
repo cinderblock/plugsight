@@ -43,6 +43,9 @@ The **USB controllers** category has a toggle on its header that switches it fro
 ### Parent/Child Link Arrows
 Selecting a device draws orthogonal connectors to its related devices — parent through the left gutter (amber), children through the right gutter (cyan). Hovering a different device overlays its relationships as a second, desaturated set. A toolbar button cycles the arrows through three modes: shown for selected + hovered, selected only, or hidden entirely.
 
+### Serial Port Notifications
+Get a **"COM5 connected"** popup the moment a serial port is plugged in or removed — an in-app toast when the PlugSight window is focused, or a native Windows notification when it's in the background. A toolbar bell button cycles what triggers a popup: off, COM/serial ports only, or every device change. The COM/LPT port name (read from the device's registry `PortName`) also appears in the detail panel.
+
 ### Search, Filter & Hide
 - **Full-text search** across device names, descriptions, manufacturers, hardware IDs, and instance IDs.
 - **"Problems only" toggle** filters the tree to show only devices with errors, warnings, or missing drivers.

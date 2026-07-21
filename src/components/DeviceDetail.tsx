@@ -113,6 +113,9 @@ const DeviceDetail: Component = () => {
 
             {/* Properties grid */}
             <div class="space-y-3">
+              <Show when={device().portName}>
+                <DetailRow label="Port" value={device().portName!} />
+              </Show>
               <DetailRow label="Description" value={device().description} />
               <DetailRow label="Manufacturer" value={device().manufacturer} />
               <Show when={device().driverVersion}>

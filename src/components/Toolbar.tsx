@@ -30,11 +30,11 @@ import {
   cycleLinkMode,
   type LinkMode,
   notifyMode,
-  cycleNotifyMode,
 } from '~/lib/device-store';
 import type { NotifyMode } from '~/lib/notifications';
 import { scanForHardwareChanges } from '~/lib/tauri';
 import Tooltip from './Tooltip';
+import NotificationSettings from './NotificationSettings';
 
 /** Human-readable labels for each density level. */
 const DENSITY_LABELS: Record<DensityLevel, string> = {
@@ -78,6 +78,7 @@ const GHOST_TIMEOUT_PRESETS: ReadonlyArray<{ ms: number; label: string }> = [
 
 const Toolbar: Component = () => {
   const [isScanning, setIsScanning] = createSignal(false);
+  const [notifOpen, setNotifOpen] = createSignal(false);
 
   const handleScan = async () => {
     // Guard against queuing multiple scans while one is in flight.
@@ -97,6 +98,7 @@ const Toolbar: Component = () => {
   };
 
   return (
+    <>
     <div class="flex items-center gap-3 px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
       {/* Search box */}
       <div class="relative flex-1 max-w-sm">
@@ -194,9 +196,9 @@ const Toolbar: Component = () => {
         />
 
         <ToolbarButton
-          label={`Plug-in notifications: ${NOTIFY_MODE_LABELS[notifyMode()]}`}
+          label={`Notification settings (currently: ${NOTIFY_MODE_LABELS[notifyMode()]})`}
           active={notifyMode() !== 'off'}
-          onClick={cycleNotifyMode}
+          onClick={() => setNotifOpen(true)}
           icon={<NotifyIcon mode={notifyMode()} />}
         />
 
@@ -279,6 +281,8 @@ const Toolbar: Component = () => {
         </label>
       </div>
     </div>
+    <NotificationSettings open={notifOpen()} onClose={() => setNotifOpen(false)} />
+    </>
   );
 };
 

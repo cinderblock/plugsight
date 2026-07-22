@@ -67,13 +67,48 @@ device tree on COM changes (via `CM_Register_Notification`), with no popup.
 - [x] Store wiring (`notifyMode` persisted, `maybeNotify`) + toolbar bell button
 - [x] Port name shown in DeviceDetail
 - [x] `bun run build` (tsc) + `cargo check` + prettier + cargo fmt all clean
-- [ ] Physical plug-test (COM adapter, focused + backgrounded) — NOT yet done;
-      can't drive real hardware from here. This is the final confirmation.
+- [x] Plug-test via ghostcom virtual COM ports (COM20 focused → in-app toast,
+      COM21 backgrounded → native). Validated the Ports class GUID + registry
+      PortName against a real port. See "Testing with ghostcom" below.
+
+## Testing with ghostcom
+
+`cinderblock/ghostcom` creates real virtual COM ports (driver already installed
+on this machine). Clone is at `~/git/playgrounds/ghostcom`.
+
+- Build the native addon: `bun install`, then **rename `.cargo/config.toml`**
+  (it's an xwin/CI cross-compile config with `C:/Users/test` + `C:/winsdk`
+  paths that don't exist here) → `bun run build:addon && bun run build:ts`.
+- Create a port: `bun run make-port.ts <portNumber> <holdSeconds>` (a small
+  holder script that creates the port, waits, then destroys — giving a clean
+  connect + disconnect pair).
+- Focused window → in-app toast; backgrounded → native OS notification.
 
 ## Gotcha found during build
 
 - `SetupDiOpenDevRegKey`'s `scope` param is a bare `u32` → pass `DICS_FLAG_GLOBAL.0`,
   but `DIREG_DEV` is already a `u32` (no `.0`).
+
+## Follow-up: notification matrix modal (in progress)
+
+Requested after the first cut shipped:
+- **Removal notifications** — already wired (`maybeNotify(device,'disconnected')`
+  in `handleDeviceRemoved`); now ON by default via the matrix.
+- **User-controllable focused behavior** → generalized into a **notification
+  matrix** in a small modal (click the toolbar bell to open):
+  - Scope selector: Off / COM & serial / All devices (`notifyMode`).
+  - 2×2 matrix (rows: Plugged in / Unplugged; cols: Focused / Background), each
+    cell picks delivery: In-app toast / Native OS toast / Off (`notifyMatrix`).
+  - Default matrix preserves old behavior: focused→in-app, background→native,
+    for both add and remove.
+- Files: `src/components/NotificationSettings.tsx` (new modal, SolidJS `Portal`),
+  `notifications.ts` (`notifyDeviceChange(notice, delivery)` — store now decides
+  the channel), `device-store.ts` (`notifyMatrix` + persistence + `maybeNotify`),
+  `Toolbar.tsx` (bell opens modal instead of cycling).
+- Native toast branding shows "PlugSight" only in an **installed** build (AUMID
+  from the Start Menu shortcut); in `cargo tauri dev` it falls back to the
+  launcher's identity (PowerShell). Verified an NSIS install exists at
+  `%LOCALAPPDATA%\Programs\PlugSight`.
 
 ## Things not to do
 

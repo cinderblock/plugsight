@@ -16,7 +16,56 @@ import { hasDeviceProblem } from './types';
 import { onDeviceEvent, getAllDevices } from './tauri';
 import { loadClassIcons } from './icon-cache';
 import { buildTopologyForest, type TopoNode } from './topology';
-import { notifyDeviceChange, NOTIFY_MODE_ORDER, type NotifyMode } from './notifications';
+import {
+  notifyDeviceChange,
+  NOTIFY_MODE_ORDER,
+  type NotifyMode,
+  type NotifyDelivery,
+} from './notifications';
+
+/**
+ * Per-event delivery choices, keyed by (event × focus-state). Each cell picks
+ * how that combination notifies: an in-app toast, a native OS toast, or nothing.
+ * This is the "notification matrix" the settings modal edits.
+ */
+export interface NotifyMatrix {
+  addedFocused: NotifyDelivery;
+  addedBackground: NotifyDelivery;
+  removedFocused: NotifyDelivery;
+  removedBackground: NotifyDelivery;
+}
+
+/** Ordered cells, for rendering the matrix as a grid (rows = event, cols = focus). */
+export const NOTIFY_MATRIX_CELLS = [
+  'addedFocused',
+  'addedBackground',
+  'removedFocused',
+  'removedBackground',
+] as const satisfies readonly (keyof NotifyMatrix)[];
+
+const NOTIFY_DELIVERIES: readonly NotifyDelivery[] = ['inApp', 'native', 'none'];
+
+/**
+ * Default matrix: preserves the original behavior (in-app toast when focused,
+ * native when backgrounded) and applies it to removals as well as additions.
+ */
+const DEFAULT_NOTIFY_MATRIX: NotifyMatrix = {
+  addedFocused: 'inApp',
+  addedBackground: 'native',
+  removedFocused: 'inApp',
+  removedBackground: 'native',
+};
+
+/** Coerce a persisted (possibly hand-edited / stale) matrix to a valid one. */
+function sanitizeMatrix(m: Partial<NotifyMatrix> | undefined): NotifyMatrix {
+  const out = { ...DEFAULT_NOTIFY_MATRIX };
+  if (m) {
+    for (const cell of NOTIFY_MATRIX_CELLS) {
+      if (NOTIFY_DELIVERIES.includes(m[cell] as NotifyDelivery)) out[cell] = m[cell] as NotifyDelivery;
+    }
+  }
+  return out;
+}
 
 // ── Configuration ─────────────────────────────────────────────────────────
 
@@ -97,8 +146,10 @@ interface PersistedState {
   usbNesting: boolean;
   /** Which parent/child relation arrows are drawn. */
   linkMode: LinkMode;
-  /** Which device changes raise a "COM5 connected" popup. */
+  /** Which devices are eligible for plug/unplug popups (off / COM only / all). */
   notifyMode: NotifyMode;
+  /** Per-event × focus-state delivery choices (the notification matrix). */
+  notifyMatrix: NotifyMatrix;
 }
 
 function loadPersistedState(): Partial<PersistedState> {
@@ -140,6 +191,7 @@ const [notifyMode, setNotifyMode] = createSignal<NotifyMode>(
   // serial-port popups work out of the box.
   NOTIFY_MODE_ORDER.includes(_saved.notifyMode as NotifyMode) ? (_saved.notifyMode as NotifyMode) : 'com',
 );
+const [notifyMatrix, setNotifyMatrix] = createSignal<NotifyMatrix>(sanitizeMatrix(_saved.notifyMatrix));
 /**
  * Topology nodes whose expand/collapse state the user has flipped away from its
  * default, keyed by instanceId. Defaults come from `TopoNode.startCollapsed`
@@ -276,9 +328,11 @@ function isComPort(device: DeviceInfo): boolean {
 }
 
 /**
- * Raise a "COM5 connected"/"disconnected" popup for a device change, subject to
- * the user's `notifyMode` setting. Never fires during the initial enumeration
- * (the backend streams every existing device as an "added" event on startup).
+ * Raise a "COM5 connected"/"disconnected" popup for a device change. Gated by
+ * the scope (`notifyMode`: off / COM only / all) and then routed by the
+ * notification matrix cell for this event × current focus state — which decides
+ * in-app toast, native OS toast, or nothing. Never fires during the initial
+ * enumeration (the backend streams every existing device as "added" on startup).
  */
 function maybeNotify(device: DeviceInfo, direction: 'connected' | 'disconnected') {
   if (!state.enumerationComplete) return;
@@ -289,11 +343,22 @@ function maybeNotify(device: DeviceInfo, direction: 'connected' | 'disconnected'
   const com = isComPort(device);
   if (mode === 'com' && !com) return;
 
+  const cell: keyof NotifyMatrix = `${direction === 'connected' ? 'added' : 'removed'}${
+    document.hasFocus() ? 'Focused' : 'Background'
+  }`;
+  const delivery = notifyMatrix()[cell];
+  if (delivery === 'none') return;
+
   const notice = com
     ? { title: `${device.portName} ${direction}`, body: device.name }
     : { title: device.name, body: direction === 'connected' ? 'Connected' : 'Disconnected' };
 
-  void notifyDeviceChange({ ...notice, direction, instanceId: device.instanceId });
+  void notifyDeviceChange({ ...notice, direction, instanceId: device.instanceId }, delivery);
+}
+
+/** Set one cell of the notification matrix (used by the settings modal). */
+function setNotifyMatrixCell(cell: keyof NotifyMatrix, delivery: NotifyDelivery) {
+  setNotifyMatrix(prev => ({ ...prev, [cell]: delivery }));
 }
 
 function markRecentChange(instanceId: string) {
@@ -651,12 +716,6 @@ function cycleLinkMode() {
   setLinkMode(LINK_MODE_ORDER[(idx + 1) % LINK_MODE_ORDER.length]);
 }
 
-/** Advance to the next notification mode (off → COM → all), wrapping around. */
-function cycleNotifyMode() {
-  const idx = NOTIFY_MODE_ORDER.indexOf(notifyMode());
-  setNotifyMode(NOTIFY_MODE_ORDER[(idx + 1) % NOTIFY_MODE_ORDER.length]);
-}
-
 /** Flip one topology node's expand/collapse state away from (or back to) its default. */
 function toggleTopoNode(instanceId: string) {
   setToggledTopoNodes(prev => {
@@ -807,6 +866,7 @@ function initDeviceStore() {
       usbNesting: usbNesting(),
       linkMode: linkMode(),
       notifyMode: notifyMode(),
+      notifyMatrix: notifyMatrix(),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
@@ -854,6 +914,8 @@ export {
   viewMode,
   linkMode,
   notifyMode,
+  setNotifyMode,
+  notifyMatrix,
   topologyForest,
   isTopoToggled,
   hasActiveFilters,
@@ -874,7 +936,7 @@ export {
   toggleGroup,
   toggleViewMode,
   cycleLinkMode,
-  cycleNotifyMode,
+  setNotifyMatrixCell,
   toggleTopoNode,
   dismissGhost,
   clearAllGhosts,

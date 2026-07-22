@@ -1,26 +1,32 @@
 /**
  * Device change notifications — the "COM5 connected" popups.
  *
- * Routing: when the PlugSight window is focused we show an in-app toast
- * (styled, clickable, can carry the device instance ID); when it's backgrounded
- * we raise a native Windows notification so the user sees it without the app up.
- * This avoids double-notifying for the same event.
+ * Two delivery channels:
+ * - an in-app toast (styled, clickable, carries the device instance ID), and
+ * - a native Windows notification (shows even when PlugSight is backgrounded).
+ *
+ * Which channel is used for a given event — and whether anything fires at all —
+ * is decided by the caller (the device store, from the user's notification
+ * matrix) and passed in as `delivery`. This module just delivers.
  *
  * Deliberately does NOT import the device store — the store calls
  * `notifyDeviceChange()` here, so keeping the dependency one-directional avoids
- * an import cycle. The store owns the `notifyMode` setting.
+ * an import cycle. The store owns the settings.
  */
 
 import { createSignal } from 'solid-js';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
-/** What kinds of device changes raise a popup. Persisted by the device store. */
+/** What kinds of device changes are eligible to raise a popup. */
 export type NotifyMode = 'off' | 'com' | 'all';
 
-/** Cycle order for the toolbar button: off → COM ports → all devices → off. */
+/** Cycle order for the scope selector: off → COM ports → all devices → off. */
 export const NOTIFY_MODE_ORDER: readonly NotifyMode[] = ['off', 'com', 'all'];
 
-/** A transient in-app toast, shown when the window is focused. */
+/** How a single event is delivered (or not). Chosen per focus-state × event. */
+export type NotifyDelivery = 'inApp' | 'native' | 'none';
+
+/** A transient in-app toast, shown when delivery is `inApp`. */
 export interface Toast {
   id: number;
   title: string;
@@ -77,12 +83,18 @@ async function ensurePermission(): Promise<boolean> {
 }
 
 /**
- * Raise a popup for a device change. Focused → in-app toast; backgrounded →
- * native OS notification (falling back to an in-app toast if the OS notification
- * can't be sent, so the event is never silently lost).
+ * Deliver a device-change popup through the requested channel. `none` is a
+ * no-op (the caller decided this event shouldn't notify). A `native` delivery
+ * falls back to an in-app toast if the OS notification can't be sent, so the
+ * event is never silently lost.
  */
-export async function notifyDeviceChange(notice: DeviceChangeNotice): Promise<void> {
-  if (document.hasFocus()) {
+export async function notifyDeviceChange(
+  notice: DeviceChangeNotice,
+  delivery: NotifyDelivery,
+): Promise<void> {
+  if (delivery === 'none') return;
+
+  if (delivery === 'inApp') {
     pushToast(notice);
     return;
   }

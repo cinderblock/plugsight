@@ -14,7 +14,7 @@
  */
 
 import type { DisplayDevice } from './types';
-import { isPhysicalLevel } from './topology';
+import { isUsbPlug } from './topology';
 
 /** A renderable row in the nested USB view. */
 export type UsbRow =
@@ -122,7 +122,10 @@ export function buildUsbRows(
       const id = d.device.instanceId;
       const kids = childrenOf.get(id);
       if (kids) {
-        const startCollapsed = !kids.some(k => isPhysicalLevel(k.device.instanceId));
+        // Stop expanding at leaf USB devices: collapse only when nothing deeper
+        // is itself a USB plug (matches the Connections view's default depth).
+        const descendants = subtreeOf(d).slice(1);
+        const startCollapsed = !descendants.some(x => isUsbPlug(x.device.instanceId));
         rows.push({ kind: 'node', key: id, device: d, children: rowsFor(id), subtree: subtreeOf(d), startCollapsed });
         continue;
       }

@@ -38,15 +38,27 @@ export function isTopologyRelevant(instanceId: string): boolean {
 }
 
 /**
- * True for nodes at the physical-plug level: PCI functions (controllers) and
- * whole USB devices/hubs. False for everything inside a device — a composite
- * device's interface functions (`USB\...&MI_xx`) and non-USB/PCI stacks (HID
- * collections etc.). A node whose children are all below this level starts
- * collapsed: the tree defaults to showing plugs, not device internals.
+ * True for a node that is itself a whole USB device you physically plug in: a
+ * hub, receiver, drive, etc. False for a device's internals — a composite
+ * device's interface functions (`USB\...&MI_xx`) and the driver stacks below
+ * them (`HID\…`, `SWD\…`). The default tree expansion stops *at* USB devices:
+ * everything down to and including USB plugs is shown; their internals are
+ * collapsed.
  */
-export function isPhysicalLevel(instanceId: string): boolean {
+export function isUsbPlug(instanceId: string): boolean {
   const u = instanceId.toUpperCase();
-  return u.startsWith('PCI\\') || (u.startsWith('USB\\') && !u.includes('&MI_'));
+  return u.startsWith('USB\\') && !u.includes('&MI_');
+}
+
+/**
+ * Whether any node strictly below this one is a USB plug (see {@link isUsbPlug}).
+ * Drives the default collapse: a USB device is collapsed only when it's a true
+ * leaf — nothing but its own internal functions beneath it. If a real device
+ * sits deeper (e.g. a keyboard on a dock's built-in hub, reached through the
+ * dock's `&MI_` hub function), the chain stays expanded so that device shows.
+ */
+function hasUsbPlugDescendant(children: TopoNode[]): boolean {
+  return children.some(c => isUsbPlug(c.device.instanceId) || hasUsbPlugDescendant(c.children));
 }
 
 /** Whether the node or anything in its subtree has a problem. */
@@ -107,7 +119,9 @@ export function buildTopologyForest(
 
     children.sort(byEldest);
     const descendantCount = children.reduce((n, c) => n + 1 + c.descendantCount, 0);
-    const startCollapsed = children.length > 0 && !children.some(c => isPhysicalLevel(c.device.instanceId));
+    // Collapse a node's internals only once there are no more USB plugs deeper
+    // down — i.e. stop expanding exactly at leaf USB devices.
+    const startCollapsed = children.length > 0 && !hasUsbPlugDescendant(children);
     const node: TopoNode = { device, children, descendantCount, dimmed: dim(device), startCollapsed };
     built.set(id, node);
     return node;

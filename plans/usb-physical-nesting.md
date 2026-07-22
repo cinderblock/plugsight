@@ -106,6 +106,26 @@ User feedback on the Connections view: identical siblings weren't grouped there 
   category's nested mode.
 - Committed as the follow-up commit after `71461d2` (see git log).
 
+## Follow-up (2026-07-17, after v0.2.0): default-collapse was too aggressive
+
+User: "you hide the whole tree — I just asked for expansion to stop at USB devices."
+
+Root cause: `startCollapsed` looked only at a node's *direct* children for a
+physical-level node. A composite device whose internal function is itself a hub
+(USB-C dock, monitor hub, KVM: `USB\…&MI_00` = the hub function) has only `&MI_`
+direct children, so it collapsed — hiding every real device plugged into that
+hub's downstream ports. On a machine where devices route through such a hub,
+that reads as "the whole tree is hidden." Verified with a mock tree in a throwaway
+`tmp-topo-test.ts` (deleted): the dock branch collapsed, hiding a downstream keyboard.
+
+Fix: `isPhysicalLevel` → `isUsbPlug` (USB\ non-`&MI_` only) + new
+`hasUsbPlugDescendant(children)`. A node now starts collapsed only when *no*
+descendant is a USB plug — i.e. it's a true leaf USB device with nothing but its
+own internal functions below. The chain stays expanded to reach any deeper USB
+device (dock → dock-hub → keyboard all show; the receiver still collapses at the
+device level). Same descendant logic applied in `usb-tree.ts` (nested category
+mode) via `subtreeOf(d).slice(1)`. Not yet released — needs a v0.2.1.
+
 ## Things not to do
 
 - Don't overwrite whole files — the other agent may have uncommitted hunks in

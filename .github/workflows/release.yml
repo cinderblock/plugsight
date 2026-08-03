@@ -110,9 +110,30 @@ jobs:
 
       # Collect all release artifacts with version-free filenames via the
       # shared script. Keeps naming consistent between local `bun run
-      # build:release` and CI.
+      # build:release` and CI. RELEASE_TAG makes the updater manifest's
+      # download URLs point at the exact release being published (on a tag
+      # push it must match the tag, not just the version in the config).
       - name: Collect artifacts
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
         run: bun run collect:artifacts release-artifacts
+
+      # A release whose latest.json is missing can never be auto-updated to, and
+      # the failure is invisible in the app (it silently falls back to opening
+      # the releases page). Fail loudly here instead.
+      - name: Verify updater artifacts were produced
+        shell: bash
+        run: |
+          for f in "latest.json" "PlugSight Setup.exe.sig"; do
+            if [[ ! -f "release-artifacts/$f" ]]; then
+              echo "::error::release-artifacts/$f is missing — in-app updates would silently break."
+              echo "Check that TAURI_SIGNING_PRIVATE_KEY is set as a repo secret and that"
+              echo "bundle.createUpdaterArtifacts is true in src-tauri/tauri.conf.json."
+              exit 1
+            fi
+          done
+          echo "Updater manifest:"
+          cat release-artifacts/latest.json
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4

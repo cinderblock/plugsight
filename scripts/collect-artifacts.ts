@@ -16,7 +16,7 @@
  *   PlugSight.msi            — MSI installer (enterprise/GPO)
  *   PlugSight.msi.sig        — updater signature for MSI installer
  *   PlugSight Portable.zip   — portable binary (zipped for distribution)
- *   latest.json                     — updater manifest
+ *   latest.json              — updater manifest (written here, not by Tauri)
  *
  * Usage:
  *   bun run scripts/collect-artifacts.ts              # → ./release-artifacts
@@ -24,14 +24,7 @@
  */
 
 import { execSync } from 'child_process';
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  rmSync,
-  statSync,
-} from 'fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
 import { basename, join, resolve } from 'path';
 
 // ── Paths ────────────────────────────────────────────────────────────────
@@ -46,6 +39,15 @@ const PRODUCT = 'PlugSight';
 
 /** Raw Rust binary name from Cargo.toml [package].name. */
 const RAW_BINARY = 'plugsight.exe';
+
+/** owner/repo the release assets are published under (for updater URLs). */
+const GITHUB_REPO = 'cinderblock/plugsight';
+
+/** Version being built, read from the canonical Tauri config. */
+function version(): string {
+  const conf = JSON.parse(readFileSync(join(ROOT, 'src-tauri', 'tauri.conf.json'), 'utf8')) as { version: string };
+  return conf.version;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -99,22 +101,13 @@ if (existsSync(portable)) {
   portableSrc = portable;
 }
 
-// Updater manifest. Tauri places it alongside whichever bundle was built last,
-// so check both directories.
-for (const dir of [nsisDir, msiDir]) {
-  const manifest = join(dir, 'latest.json');
-  if (existsSync(manifest)) {
-    copies.push({ src: manifest, dest: join(OUT, 'latest.json') });
-    break;
-  }
-}
+// Note: the updater manifest is NOT produced by the bundler — see
+// `writeUpdaterManifest` below, which builds it after the copies are done.
 
 // ── Execute ──────────────────────────────────────────────────────────────
 
 if (copies.length === 0 && !portableSrc) {
-  console.error(
-    'No release artifacts found. Run `cargo tauri build` first to produce the bundles.',
-  );
+  console.error('No release artifacts found. Run `cargo tauri build` first to produce the bundles.');
   process.exit(1);
 }
 
@@ -152,13 +145,56 @@ if (portableSrc) {
   console.log(`  ${zipName.padEnd(32)}  ${size.padStart(10)}`);
 }
 
+// ── Updater manifest ─────────────────────────────────────────────────────
+
+/**
+ * Write `latest.json`, the manifest the in-app updater fetches from
+ * `releases/latest/download/latest.json` (see plugins.updater.endpoints in
+ * tauri.conf.json).
+ *
+ * Tauri v2's bundler produces the update bundles and their `.sig` signatures
+ * but *not* this manifest — the docs point you at tauri-action or at writing it
+ * yourself. We write it here so `bun run build:release` and CI stay identical.
+ *
+ * `signature` is the literal contents of the `.sig` file; `url` must point at
+ * the asset on the release being published. GitHub rewrites spaces in asset
+ * names to dots, so the URL uses the dotted form of our renamed installer.
+ */
+function writeUpdaterManifest(): boolean {
+  const sig = join(OUT, `${PRODUCT} Setup.exe.sig`);
+  if (!existsSync(sig)) return false;
+
+  // The release tag this build will be published under. CI passes it through
+  // (a tag push is the trigger); locally it's derived from the version, which
+  // `bun run version:bump` keeps in sync across all three config files.
+  const tag = process.env.RELEASE_TAG || `v${version()}`;
+  const assetName = `${PRODUCT} Setup.exe`.replace(/ /g, '.'); // GitHub rewrites spaces to dots
+  const assetUrl = `https://github.com/${GITHUB_REPO}/releases/download/${tag}/${assetName}`;
+
+  const manifest = {
+    version: tag.replace(/^v/, ''),
+    pub_date: new Date().toISOString(),
+    platforms: {
+      'windows-x86_64': {
+        signature: readFileSync(sig, 'utf8').trim(),
+        url: assetUrl,
+      },
+    },
+  };
+
+  writeFileSync(join(OUT, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log(`  ${'latest.json'.padEnd(32)}  ${`→ ${tag}`.padStart(10)}`);
+  return true;
+}
+
+const wroteManifest = writeUpdaterManifest();
+
 // Warn if signing artifacts are missing (signing wasn't enabled).
-const hasSigs = copies.some(c => c.dest.endsWith('.sig'));
-const hasManifest = copies.some(c => basename(c.dest) === 'latest.json');
-if (!hasSigs || !hasManifest) {
+if (!wroteManifest) {
   console.warn(
-    '\nWarning: updater signatures or latest.json are missing.\n' +
-      'Set TAURI_SIGNING_PRIVATE_KEY_PATH (or TAURI_SIGNING_PRIVATE_KEY) before building\n' +
-      'to enable in-app auto-updates for this release.',
+    '\nWarning: updater signatures and latest.json are missing, so this build\n' +
+      'CANNOT be auto-updated to. Set TAURI_SIGNING_PRIVATE_KEY_PATH (or\n' +
+      'TAURI_SIGNING_PRIVATE_KEY) before building, and make sure\n' +
+      'bundle.createUpdaterArtifacts is true in tauri.conf.json.',
   );
 }

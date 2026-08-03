@@ -47,7 +47,7 @@ Selecting a device draws orthogonal connectors to its related devices — parent
 Get a **"COM5 connected"** popup the moment a serial port is plugged in or removed — an in-app toast when the PlugSight window is focused, or a native Windows notification when it's in the background. A toolbar bell button cycles what triggers a popup: off, COM/serial ports only, or every device change. The COM/LPT port name (read from the device's registry `PortName`) also appears in the detail panel.
 
 ### Search, Filter & Hide
-- **Full-text search** across device names, descriptions, manufacturers, hardware IDs, and instance IDs.
+- **Full-text search** across device names, COM/LPT port names, descriptions, manufacturers, hardware IDs, and instance IDs. Works in both views, and matches never hide behind a collapsed category, hub, or group — including devices plugged in while the search is active.
 - **"Problems only" toggle** filters the tree to show only devices with errors, warnings, or missing drivers.
 - **Hide individual devices or entire categories** to declutter the view — hidden state persists across sessions.
 - **Solo mode** on category headers isolates a single category, collapsing everything else.

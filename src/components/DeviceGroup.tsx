@@ -14,7 +14,7 @@ import type { Component } from 'solid-js';
 import { Index, Show, createMemo } from 'solid-js';
 import type { DisplayDevice } from '~/lib/types';
 import { hasDeviceProblem } from '~/lib/types';
-import { searchQuery, showProblemsOnly, isGroupExpanded, toggleGroup } from '~/lib/device-store';
+import { isFiltering, isGroupExpanded, toggleGroup } from '~/lib/device-store';
 import DeviceIcon from './DeviceIcon';
 import DeviceEntry from './DeviceEntry';
 
@@ -36,7 +36,7 @@ const DeviceGroup: Component<DeviceGroupProps> = props => {
 
   // Force open during search/problem filtering or when a member has a problem,
   // so a collapsed group never hides something the user is looking for.
-  const forceOpen = () => searchQuery() !== '' || showProblemsOnly() || hasProblem();
+  const forceOpen = () => isFiltering() || hasProblem();
   const isExpanded = () => forceOpen() || isGroupExpanded(props.groupKey);
 
   return (

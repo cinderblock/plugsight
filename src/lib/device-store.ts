@@ -15,13 +15,8 @@ import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice
 import { hasDeviceProblem } from './types';
 import { onDeviceEvent, getAllDevices } from './tauri';
 import { loadClassIcons } from './icon-cache';
-import { buildTopologyForest, type TopoNode } from './topology';
-import {
-  notifyDeviceChange,
-  NOTIFY_MODE_ORDER,
-  type NotifyMode,
-  type NotifyDelivery,
-} from './notifications';
+import { buildTopologyForest, buildFilteredTopologyForest, type TopoNode } from './topology';
+import { notifyDeviceChange, NOTIFY_MODE_ORDER, type NotifyMode, type NotifyDelivery } from './notifications';
 
 /**
  * Per-event delivery choices, keyed by (event × focus-state). Each cell picks
@@ -213,6 +208,14 @@ const [hoveredId, setHoveredId] = createSignal<string | null>(null);
 /** Recent add/remove counts per class GUID, for category header pills. */
 const [recentAddsPerClass, setRecentAddsPerClass] = createSignal<Record<string, number>>({});
 const [recentRemovesPerClass, setRecentRemovesPerClass] = createSignal<Record<string, number>>({});
+
+/**
+ * The search query normalised for matching — lowercased and trimmed, `''` when
+ * nothing is being searched for. Every consumer (the filters *and* the views
+ * that force drawers open while filtering) must agree on what "searching" means,
+ * otherwise a whitespace-only query forces trees open while matching nothing.
+ */
+const searchTerm = createMemo(() => searchQuery().toLowerCase().trim());
 
 // ── Store ─────────────────────────────────────────────────────────────────
 
@@ -516,7 +519,7 @@ const descendantCounts = createMemo<Map<string, number>>(() => {
 
 /** All devices grouped by category, including ghosts, filtered by search. */
 const categories = createMemo<DeviceCategory[]>(() => {
-  const query = searchQuery().toLowerCase().trim();
+  const query = searchTerm();
   const problemsOnly = showProblemsOnly();
   const hiddenDevices = hiddenDeviceIds();
   const hiddenClasses = hiddenClassGuids();
@@ -594,40 +597,36 @@ const topologyForest = createMemo<TopoNode[]>(() => {
   const devicesById = new Map<string, DeviceInfo>();
   for (const d of Object.values(state.devices)) devicesById.set(d.instanceId, d);
 
-  if (!showProblemsOnly()) {
+  const query = searchTerm();
+  const problemsOnly = showProblemsOnly();
+  const hiddenDevices = hiddenDeviceIds();
+  const hiddenClasses = hiddenClassGuids();
+  const filtering = query !== '' || problemsOnly || hiddenDevices.size > 0 || hiddenClasses.size > 0;
+
+  if (!filtering) {
     return buildTopologyForest(devicesById, childrenByParent, parentByChild);
   }
 
-  // Problems filter: keep problem devices plus enough context for relationships
-  // to still make sense — their ancestor chain (so the tree can place them) and
-  // their direct children. Non-problem context nodes are rendered dimmed.
-  const include = new Set<string>();
-  for (const d of devicesById.values()) {
-    if (!hasDeviceProblem(d.status)) continue;
-    include.add(d.instanceId);
-    // Ancestor chain up to the root.
-    let pid = parentByChild.get(d.instanceId);
-    while (pid && devicesById.has(pid) && !include.has(pid)) {
-      include.add(pid);
-      pid = parentByChild.get(pid);
-    }
-    // Direct children.
-    const kids = childrenByParent.get(d.instanceId);
-    if (kids) for (const k of kids) include.add(k);
-  }
-
-  return buildTopologyForest(
+  // Same predicate the category view applies to each device, so both views agree
+  // on what a filter means; the topology then re-adds the ancestor chain each
+  // match needs to be placed at all.
+  return buildFilteredTopologyForest(
     devicesById,
     childrenByParent,
     parentByChild,
-    d => include.has(d.instanceId),
-    d => !hasDeviceProblem(d.status),
+    d =>
+      !hiddenClasses.has(d.classGuid) &&
+      !hiddenDevices.has(d.instanceId) &&
+      (!query || matchesSearch(d, query)) &&
+      (!problemsOnly || hasDeviceProblem(d.status)),
+    problemsOnly,
   );
 });
 
 function matchesSearch(device: DeviceInfo, query: string): boolean {
   return (
     device.name.toLowerCase().includes(query) ||
+    (device.portName?.toLowerCase().includes(query) ?? false) ||
     device.description.toLowerCase().includes(query) ||
     device.manufacturer.toLowerCase().includes(query) ||
     device.instanceId.toLowerCase().includes(query) ||
@@ -661,8 +660,17 @@ const counts = createMemo(() => {
 
 /** Whether any filters are actively hiding content. */
 const hasActiveFilters = createMemo(
-  () => searchQuery() !== '' || showProblemsOnly() || hiddenDeviceIds().size > 0 || hiddenClassGuids().size > 0,
+  () => searchTerm() !== '' || showProblemsOnly() || hiddenDeviceIds().size > 0 || hiddenClassGuids().size > 0,
 );
+
+/**
+ * Whether a filter is narrowing the view to specific devices (search or the
+ * problems filter). Collapsible containers force themselves open while this is
+ * true: a match must never stay hidden behind a collapsed category, hub, or
+ * group — including one that only becomes non-empty when a device is plugged in
+ * later, which is otherwise collapsed by default and would silently swallow it.
+ */
+const isFiltering = createMemo(() => searchTerm() !== '' || showProblemsOnly());
 
 // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -902,6 +910,7 @@ export {
   setSelectedId,
   searchQuery,
   setSearchQuery,
+  isFiltering,
   showProblemsOnly,
   setShowProblemsOnly,
   ghostTimeoutMs,

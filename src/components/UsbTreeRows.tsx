@@ -14,7 +14,7 @@ import type { Component } from 'solid-js';
 import { Index, Show, Switch, Match } from 'solid-js';
 import type { UsbRow } from '~/lib/usb-tree';
 import { anyVisible } from '~/lib/usb-tree';
-import { isTopoToggled, toggleTopoNode, searchQuery, showProblemsOnly } from '~/lib/device-store';
+import { isTopoToggled, toggleTopoNode, isFiltering } from '~/lib/device-store';
 import DeviceEntry from './DeviceEntry';
 import DeviceGroup from './DeviceGroup';
 
@@ -24,8 +24,7 @@ type GroupRow = Extract<UsbRow, { kind: 'group' }>;
 const UsbNodeRow: Component<{ row: NodeRow }> = props => {
   const hasChildren = () => props.row.children.length > 0;
   const instanceId = () => props.row.device.device.instanceId;
-  const forceOpen = () => searchQuery() !== '' || showProblemsOnly();
-  const collapsed = () => hasChildren() && !forceOpen() && props.row.startCollapsed !== isTopoToggled(instanceId());
+  const collapsed = () => hasChildren() && !isFiltering() && props.row.startCollapsed !== isTopoToggled(instanceId());
 
   // Keep a hub/controller row visible while any of its subtree passes the
   // filters, so the physical chain down to a matching device stays intact.

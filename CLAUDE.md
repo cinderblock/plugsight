@@ -31,6 +31,10 @@ cd src-tauri && cargo check
 # Build frontend only
 bun run build
 
+# Frontend typecheck + unit tests (pure transforms in src/lib/*.test.ts)
+bun run typecheck
+bun run test
+
 # Bump version across all config files (package.json, Cargo.toml, tauri.conf.json)
 bun run version:bump patch          # or: minor, major, prerelease rc, 1.0.0
 bun run version:bump patch --tag    # also creates a git tag

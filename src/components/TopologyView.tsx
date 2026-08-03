@@ -21,7 +21,8 @@ import {
   setHoveredId,
   isTopoToggled,
   toggleTopoNode,
-  showProblemsOnly,
+  isFiltering,
+  hasActiveFilters,
   groupIdentical,
   isGroupExpanded,
   toggleGroup,
@@ -31,17 +32,17 @@ import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
 import RelationArrows from './RelationArrows';
 
-/** Whether identical-sibling grouping applies (off under the problems filter,
- *  where the tree is forced open and dimmed-context rows would mislead). */
-const groupingOn = () => groupIdentical() && !showProblemsOnly();
+/** Whether identical-sibling grouping applies (off while filtering, where the
+ *  tree is forced open and grouped/dimmed-context rows would mislead). */
+const groupingOn = () => groupIdentical() && !isFiltering();
 
 const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
   const device = () => props.node.device;
   const hasChildren = () => props.node.children.length > 0;
   // Default depth comes from startCollapsed (expanded down to the physical-plug
-  // level); a user toggle flips it. Forced open under the problems filter so
-  // the matching devices show.
-  const collapsed = () => !showProblemsOnly() && props.node.startCollapsed !== isTopoToggled(device().instanceId);
+  // level); a user toggle flips it. Forced open while filtering so the matching
+  // devices show — the forest is already pruned to matches plus their ancestors.
+  const collapsed = () => !isFiltering() && props.node.startCollapsed !== isTopoToggled(device().instanceId);
   const isSelected = () => selectedId() === device().instanceId;
   const isRecentChange = () => recentChanges().has(device().instanceId);
   const hasProblem = () => hasDeviceProblem(device().status);
@@ -234,7 +235,9 @@ const TopologyView: Component = () => {
       {/* Empty state */}
       <Show when={state.enumerationComplete && topologyForest().length === 0}>
         <div class="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-500">
-          <span class="text-sm">No USB or PCI devices found</span>
+          <span class="text-sm">
+            {hasActiveFilters() ? 'No devices match your search' : 'No USB or PCI devices found'}
+          </span>
         </div>
       </Show>
 

@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri",
     "build:release": "cargo tauri build && bun run scripts/collect-artifacts.ts",
@@ -25,6 +27,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
+    "@types/bun": "^1.3.14",
     "tailwindcss": "^4",
     "typescript": "^5.7",
     "vite": "^6",

@@ -138,6 +138,56 @@ export function buildTopologyForest(
   return roots;
 }
 
+/**
+ * Build the topology forest narrowed to the devices passing `isMatch` (a search
+ * hit, a problem device, …).
+ *
+ * A match is useless without the chain that places it, so every ancestor of a
+ * match is kept too — rendered dimmed, since it's context rather than a hit.
+ * `includeMatchChildren` additionally keeps each match's direct children, which
+ * the problems filter wants (a failing hub's devices explain the failure) but a
+ * search does not (non-matching children would bury the hits).
+ *
+ * Returning an empty forest when nothing matches is correct: the view shows its
+ * "no devices match" state.
+ */
+export function buildFilteredTopologyForest(
+  devicesById: Map<string, DeviceInfo>,
+  childrenByParent: Map<string, Set<string>>,
+  parentByChild: Map<string, string>,
+  isMatch: (device: DeviceInfo) => boolean,
+  includeMatchChildren = false,
+): TopoNode[] {
+  const matched = new Set<string>();
+  const include = new Set<string>();
+
+  for (const device of devicesById.values()) {
+    if (!isMatch(device)) continue;
+    matched.add(device.instanceId);
+    include.add(device.instanceId);
+
+    // Ancestor chain up to the root.
+    let pid = parentByChild.get(device.instanceId);
+    while (pid && devicesById.has(pid) && !include.has(pid)) {
+      include.add(pid);
+      pid = parentByChild.get(pid);
+    }
+
+    if (includeMatchChildren) {
+      const kids = childrenByParent.get(device.instanceId);
+      if (kids) for (const k of kids) include.add(k);
+    }
+  }
+
+  return buildTopologyForest(
+    devicesById,
+    childrenByParent,
+    parentByChild,
+    d => include.has(d.instanceId),
+    d => !matched.has(d.instanceId),
+  );
+}
+
 /** Eldest (largest subtree) first, then alphabetical by name. */
 function byEldest(a: TopoNode, b: TopoNode): number {
   if (b.descendantCount !== a.descendantCount) return b.descendantCount - a.descendantCount;

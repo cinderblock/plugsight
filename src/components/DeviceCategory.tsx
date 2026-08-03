@@ -13,7 +13,7 @@ import { buildUsbRows } from '~/lib/usb-tree';
 import {
   toggleCategory,
   state,
-  showProblemsOnly,
+  isFiltering,
   hideCategory,
   soloCategory,
   recentAddsPerClass,
@@ -35,7 +35,9 @@ interface DeviceCategoryProps {
 
 const DeviceCategory: Component<DeviceCategoryProps> = props => {
   const cat = () => props.category;
-  const isExpanded = () => showProblemsOnly() || (state.expandedCategories[cat().classGuid] ?? false);
+  // Forced open while filtering: a category the user never expanded (or one that
+  // springs into existence when a device is plugged in) must not hide matches.
+  const isExpanded = () => isFiltering() || (state.expandedCategories[cat().classGuid] ?? false);
   const visibleDevices = () => cat().devices.filter(d => d.visible);
   const liveCount = () => visibleDevices().filter(d => !d.isGhost).length;
   const ghostCount = () => visibleDevices().filter(d => d.isGhost).length;

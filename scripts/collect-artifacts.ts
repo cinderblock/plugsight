@@ -59,13 +59,29 @@ interface Copy {
 }
 
 /**
- * Find the first file in `dir` whose name ends with `suffix`.
- * Returns null if the directory is missing or no match is found.
+ * Find the bundle in `dir` whose name ends with `suffix` and belongs to the
+ * version being built.
+ *
+ * Tauri embeds the version in the filename and never cleans the bundle
+ * directory, so after a few local builds `nsis/` holds every installer ever
+ * produced. Picking the first match alphabetically would pair the *oldest*
+ * installer with the *newest* signature — a manifest that every client rejects.
+ * So: filter to this version, and among those take the most recently written.
  */
-function findFirst(dir: string, suffix: string): string | null {
+function findBundle(dir: string, suffix: string): string | null {
   if (!existsSync(dir)) return null;
-  const match = readdirSync(dir).find(f => f.endsWith(suffix));
-  return match ? join(dir, match) : null;
+  const candidates = readdirSync(dir)
+    .filter(f => f.endsWith(suffix) && f.includes(`_${version()}_`))
+    .map(f => join(dir, f))
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+  return candidates[0] ?? null;
+}
+
+/** The updater signature sitting beside a bundle, or null if it wasn't signed. */
+function sigFor(bundle: string | null): string | null {
+  if (!bundle) return null;
+  const sig = `${bundle}.sig`;
+  return existsSync(sig) ? sig : null;
 }
 
 function humanSize(bytes: number): string {
@@ -78,17 +94,18 @@ function humanSize(bytes: number): string {
 
 const copies: Copy[] = [];
 
-// NSIS installer + signature.
+// NSIS installer + its own signature (taken from beside it, never matched
+// independently — the manifest is only valid if they came from one build).
 const nsisDir = join(BUNDLE, 'nsis');
-const nsisExe = findFirst(nsisDir, '-setup.exe');
-const nsisSig = findFirst(nsisDir, '-setup.exe.sig');
+const nsisExe = findBundle(nsisDir, '-setup.exe');
+const nsisSig = sigFor(nsisExe);
 if (nsisExe) copies.push({ src: nsisExe, dest: join(OUT, `${PRODUCT} Setup.exe`) });
 if (nsisSig) copies.push({ src: nsisSig, dest: join(OUT, `${PRODUCT} Setup.exe.sig`) });
 
 // MSI installer + signature. Tauri names them like "Product_0.1.0_x64_en-US.msi".
 const msiDir = join(BUNDLE, 'msi');
-const msiFile = findFirst(msiDir, '.msi');
-const msiSig = findFirst(msiDir, '.msi.sig');
+const msiFile = findBundle(msiDir, '.msi');
+const msiSig = sigFor(msiFile);
 if (msiFile) copies.push({ src: msiFile, dest: join(OUT, `${PRODUCT}.msi`) });
 if (msiSig) copies.push({ src: msiSig, dest: join(OUT, `${PRODUCT}.msi.sig`) });
 
@@ -164,6 +181,24 @@ function writeUpdaterManifest(): boolean {
   const sig = join(OUT, `${PRODUCT} Setup.exe.sig`);
   if (!existsSync(sig)) return false;
 
+  const signature = readFileSync(sig, 'utf8').trim();
+
+  // A signature over a *different* build verifies as tampering on the client,
+  // and the only symptom is that updates silently stop working. minisign records
+  // the signed filename in its trusted comment, so check it really is the
+  // installer we're publishing before advertising the pair as a matched set.
+  const signedName = Buffer.from(signature, 'base64')
+    .toString('utf8')
+    .match(/\bfile:(.+)/)?.[1]
+    ?.trim();
+  if (signedName && nsisExe && signedName !== basename(nsisExe)) {
+    console.error(
+      `\nRefusing to write latest.json: the signature is for "${signedName}" but the\n` +
+        `installer being published is "${basename(nsisExe)}". These are different builds.`,
+    );
+    process.exit(1);
+  }
+
   // The release tag this build will be published under. CI passes it through
   // (a tag push is the trigger); locally it's derived from the version, which
   // `bun run version:bump` keeps in sync across all three config files.
@@ -175,10 +210,7 @@ function writeUpdaterManifest(): boolean {
     version: tag.replace(/^v/, ''),
     pub_date: new Date().toISOString(),
     platforms: {
-      'windows-x86_64': {
-        signature: readFileSync(sig, 'utf8').trim(),
-        url: assetUrl,
-      },
+      'windows-x86_64': { signature, url: assetUrl },
     },
   };
 

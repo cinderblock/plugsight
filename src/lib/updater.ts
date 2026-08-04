@@ -199,8 +199,14 @@ async function tryNativeUpdater(): Promise<boolean> {
     // Plugin worked but no update available.
     setUpdateAvailable(false);
     return true;
-  } catch {
-    // Plugin not available or endpoint unreachable — fall through to GitHub API.
+  } catch (err) {
+    // Plugin unavailable (portable build, dev mode) or the endpoint is
+    // unreachable / has no manifest — fall through to the GitHub API.
+    //
+    // Logged rather than swallowed: to the user this failure is indistinguishable
+    // from "you're up to date", which is how three releases shipped with no
+    // latest.json at all before anyone noticed in-app updates never ran.
+    console.warn('Native updater check failed; falling back to GitHub Releases API:', err);
     return false;
   }
 }

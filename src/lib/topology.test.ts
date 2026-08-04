@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { DeviceInfo } from './types';
-import { buildFilteredTopologyForest, buildTopologyForest, type TopoNode } from './topology';
+import { buildFilteredTopologyForest, buildTopologyForest, elideHidden, type TopoNode } from './topology';
 
 /** A minimal device; only the fields the topology reads actually matter. */
 function device(instanceId: string, name: string, parentId = ''): DeviceInfo {
@@ -153,6 +153,96 @@ describe('buildFilteredTopologyForest', () => {
     );
 
     expect(forest).toEqual([]);
+  });
+});
+
+describe('elideHidden', () => {
+  const hiddenIs =
+    (...ids: string[]) =>
+    (d: DeviceInfo) =>
+      ids.includes(d.instanceId);
+
+  test('returns the inputs untouched when nothing is hidden', () => {
+    const f = fixture();
+    const rel = elideHidden(...argsOf(f), () => false);
+
+    expect(rel.devicesById).toBe(f.devicesById);
+    expect(rel.childrenByParent).toBe(f.childrenByParent);
+    expect(rel.parentByChild).toBe(f.parentByChild);
+  });
+
+  test('drops only the hidden row — children reparent to the ancestor above it', () => {
+    const rel = elideHidden(...argsOf(fixture()), hiddenIs('USB\\HUB'));
+    const nodes = flatten(buildTopologyForest(rel.devicesById, rel.childrenByParent, rel.parentByChild));
+
+    expect(nodes.has('USB\\HUB')).toBe(false);
+    // The hub's devices survive, now hanging off the root hub it plugged into.
+    expect(nodes.has('USB\\KEYBOARD')).toBe(true);
+    expect(
+      nodes
+        .get('USB\\ROOT_HUB')!
+        .children.map(c => c.device.instanceId)
+        .sort(),
+    ).toEqual(['USB\\ADAPTER', 'USB\\KEYBOARD']);
+  });
+
+  test('a hidden device never survives as dimmed context under a search', () => {
+    // The bug this exists to prevent: buildFilteredTopologyForest re-adds the
+    // ancestors of any match, which would resurrect a hidden hub as a faded row.
+    const rel = elideHidden(...argsOf(fixture()), hiddenIs('USB\\HUB'));
+    const nodes = flatten(
+      buildFilteredTopologyForest(rel.devicesById, rel.childrenByParent, rel.parentByChild, matchName('keyboard')),
+    );
+
+    expect(nodes.has('USB\\HUB')).toBe(false);
+    expect(nodes.has('USB\\KEYBOARD')).toBe(true);
+  });
+
+  test('walks up through a run of hidden ancestors', () => {
+    const rel = elideHidden(...argsOf(fixture()), hiddenIs('USB\\HUB', 'USB\\ROOT_HUB'));
+    const nodes = flatten(buildTopologyForest(rel.devicesById, rel.childrenByParent, rel.parentByChild));
+
+    expect(
+      nodes
+        .get('PCI\\CTRL')!
+        .children.map(c => c.device.instanceId)
+        .sort(),
+    ).toEqual(['USB\\ADAPTER', 'USB\\KEYBOARD']);
+  });
+
+  test('orphaned children become roots when the whole chain above is hidden', () => {
+    const rel = elideHidden(...argsOf(fixture()), hiddenIs('PCI\\CTRL', 'USB\\ROOT_HUB', 'USB\\HUB'));
+    const forest = buildTopologyForest(rel.devicesById, rel.childrenByParent, rel.parentByChild);
+
+    expect(forest.map(n => n.device.instanceId).sort()).toEqual(['USB\\ADAPTER', 'USB\\KEYBOARD']);
+  });
+
+  test('hiding a leaf leaves the rest of the tree intact', () => {
+    const rel = elideHidden(...argsOf(fixture()), hiddenIs('USB\\KEYBOARD'));
+    const nodes = flatten(buildTopologyForest(rel.devicesById, rel.childrenByParent, rel.parentByChild));
+
+    expect(nodes.has('USB\\KEYBOARD')).toBe(false);
+    expect(nodes.size).toBe(DEVICES.length - 1);
+  });
+
+  test('a parent cycle through a hidden node roots rather than self-parents', () => {
+    // relationIndex rejects self-parenting but not a longer loop, so a bad
+    // driver can report A→B→A. Walking up from A through hidden B lands back on
+    // A; making A its own parent would drop A and everything under it, since
+    // the forest builder only starts from nodes with no in-set parent.
+    const cyclic = fixture([
+      device('USB\\A', 'A', 'USB\\B'),
+      device('USB\\B', 'B', 'USB\\A'),
+      device('USB\\C', 'C', 'USB\\B'),
+    ]);
+    const rel = elideHidden(...argsOf(cyclic), hiddenIs('USB\\B'));
+
+    expect(rel.devicesById.has('USB\\B')).toBe(false);
+    expect(rel.parentByChild.get('USB\\A')).toBeUndefined();
+    expect(rel.parentByChild.get('USB\\C')).toBe('USB\\A');
+
+    const forest = buildTopologyForest(rel.devicesById, rel.childrenByParent, rel.parentByChild);
+    expect(flatten(forest).size).toBe(2);
   });
 });
 

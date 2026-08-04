@@ -3,8 +3,13 @@
  *
  * Renders devices as a tree by their logical parent→child wiring (USB host
  * controller → root hub → hub → device; PCI device → bus), instead of grouped
- * by Windows device class. Selection, hover highlighting (amber = parent,
- * cyan = child), and double-click-to-open-properties match the category view.
+ * by Windows device class. Selection and double-click-to-open-properties match
+ * the category view.
+ *
+ * Deliberately no relation-arrow overlay: this tree's indentation *is* the
+ * parent→child index the arrows draw from, so every connector would restate the
+ * nesting it sits on top of. The arrows earn their keep only in the category
+ * view, where nothing else shows the wiring.
  */
 
 import type { Component } from 'solid-js';
@@ -26,11 +31,11 @@ import {
   groupIdentical,
   isGroupExpanded,
   toggleGroup,
+  hideDevice,
 } from '~/lib/device-store';
 import { openDeviceProperties } from '~/lib/tauri';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
-import RelationArrows from './RelationArrows';
 
 /** Whether identical-sibling grouping applies (off while filtering, where the
  *  tree is forced open and grouped/dimmed-context rows would mislead). */
@@ -125,8 +130,45 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
           </span>
         </Show>
 
-        {/* Zero-width marker at the end of the label, for relation connectors. */}
-        <span data-role="label-end" aria-hidden="true" />
+        {/* Action buttons (visible on hover) — div, not button, so they don't
+            nest inside the clickable row. Hiding is not the same as collapsing:
+            the chevron folds this node's children away, hide drops the row from
+            both views and persists. */}
+        <div class="ml-auto shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Properties — also on double-click, but nothing advertises that */}
+          <div
+            role="button"
+            class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+            aria-label="Properties"
+            onClick={e => {
+              e.stopPropagation();
+              openDeviceProperties(device().instanceId);
+            }}
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </div>
+
+          {/* Hide — the tree closes up around it; children reparent upward */}
+          <div
+            role="button"
+            class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+            aria-label="Hide this device"
+            onClick={e => {
+              e.stopPropagation();
+              hideDevice(device().instanceId);
+            }}
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+              <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+              <line x1="1" y1="1" x2="23" y2="23" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       {/* Children — identical siblings collapse into group rows */}
@@ -155,7 +197,6 @@ const TopoGroup: Component<{ group: Extract<TopoRow, { kind: 'group' }>; depth: 
       <div
         class="group flex items-center gap-2 pr-2 py-1 border-l-4 border-l-transparent rounded-r-lg cursor-pointer transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800/50"
         style={{ 'padding-left': `${props.depth * 16 + 8}px` }}
-        data-arrow-row
         onClick={() => toggleGroup(props.group.key)}
       >
         {/* Expand/collapse chevron */}
@@ -190,9 +231,6 @@ const TopoGroup: Component<{ group: Extract<TopoRow, { kind: 'group' }>; depth: 
             {problemCount()}
           </span>
         </Show>
-
-        {/* Zero-width marker at the end of the label, for relation connectors. */}
-        <span data-role="label-end" aria-hidden="true" />
       </div>
 
       {/* Members, each with its own subtree */}
@@ -218,9 +256,8 @@ const TopoRows: Component<{ rows: TopoRow[]; depth: number }> = props => (
 );
 
 const TopologyView: Component = () => {
-  let containerRef!: HTMLDivElement;
   return (
-    <div ref={containerRef} class="device-tree relative flex-1 overflow-y-auto py-2 pl-5 pr-6">
+    <div class="device-tree flex-1 overflow-y-auto py-2 pl-5 pr-6">
       {/* Loading state */}
       <Show when={!state.enumerationComplete}>
         <div class="flex items-center justify-center py-8 gap-3 text-gray-400 dark:text-gray-500">
@@ -243,9 +280,6 @@ const TopologyView: Component = () => {
 
       {/* Topology forest — root siblings group like any other level */}
       <TopoRows rows={groupTopoSiblings(topologyForest(), null, groupingOn())} depth={0} />
-
-      {/* Hover relationship connectors (overlay) */}
-      <RelationArrows container={() => containerRef} />
     </div>
   );
 };

@@ -15,7 +15,7 @@ import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice
 import { hasDeviceProblem } from './types';
 import { onDeviceEvent, getAllDevices } from './tauri';
 import { loadClassIcons } from './icon-cache';
-import { buildTopologyForest, buildFilteredTopologyForest, type TopoNode } from './topology';
+import { buildTopologyForest, buildFilteredTopologyForest, elideHidden, type TopoNode } from './topology';
 import { notifyDeviceChange, NOTIFY_MODE_ORDER, type NotifyMode, type NotifyDelivery } from './notifications';
 
 /**
@@ -601,24 +601,30 @@ const topologyForest = createMemo<TopoNode[]>(() => {
   const problemsOnly = showProblemsOnly();
   const hiddenDevices = hiddenDeviceIds();
   const hiddenClasses = hiddenClassGuids();
-  const filtering = query !== '' || problemsOnly || hiddenDevices.size > 0 || hiddenClasses.size > 0;
 
-  if (!filtering) {
-    return buildTopologyForest(devicesById, childrenByParent, parentByChild);
+  // Hidden devices are removed from the wiring outright, before any narrowing —
+  // the tree closes up around them and their children reparent to the nearest
+  // surviving ancestor. Search and the problems filter are the opposite: they
+  // narrow to matches but keep the ancestor chain that places each one.
+  const rel = elideHidden(
+    devicesById,
+    childrenByParent,
+    parentByChild,
+    d => hiddenClasses.has(d.classGuid) || hiddenDevices.has(d.instanceId),
+  );
+
+  if (query === '' && !problemsOnly) {
+    return buildTopologyForest(rel.devicesById, rel.childrenByParent, rel.parentByChild);
   }
 
   // Same predicate the category view applies to each device, so both views agree
   // on what a filter means; the topology then re-adds the ancestor chain each
   // match needs to be placed at all.
   return buildFilteredTopologyForest(
-    devicesById,
-    childrenByParent,
-    parentByChild,
-    d =>
-      !hiddenClasses.has(d.classGuid) &&
-      !hiddenDevices.has(d.instanceId) &&
-      (!query || matchesSearch(d, query)) &&
-      (!problemsOnly || hasDeviceProblem(d.status)),
+    rel.devicesById,
+    rel.childrenByParent,
+    rel.parentByChild,
+    d => (!query || matchesSearch(d, query)) && (!problemsOnly || hasDeviceProblem(d.status)),
     problemsOnly,
   );
 });

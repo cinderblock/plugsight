@@ -188,6 +188,78 @@ export function buildFilteredTopologyForest(
   );
 }
 
+/**
+ * The same relation maps with every `isHidden` device elided: each one's
+ * children re-attach to its nearest non-hidden ancestor, or become roots when
+ * the whole chain above them is hidden.
+ *
+ * Hiding is categorically different from a search miss, and can't go through
+ * {@link buildFilteredTopologyForest}'s predicate. That function re-adds the
+ * ancestors of anything it keeps — correct for a search, where a match is
+ * meaningless without the chain that places it, but wrong here: a hidden hub
+ * would survive as a dimmed row, looking like the hide button did nothing.
+ * Eliding first also keeps hide meaning "remove this row", never "remove this
+ * branch" — matching what the category view does with the same hidden-ID set.
+ *
+ * Returns the inputs unchanged when nothing is hidden, so the common path
+ * allocates nothing.
+ */
+export function elideHidden(
+  devicesById: Map<string, DeviceInfo>,
+  childrenByParent: Map<string, Set<string>>,
+  parentByChild: Map<string, string>,
+  isHidden: (device: DeviceInfo) => boolean,
+): {
+  devicesById: Map<string, DeviceInfo>;
+  childrenByParent: Map<string, Set<string>>;
+  parentByChild: Map<string, string>;
+} {
+  const hidden = new Set<string>();
+  for (const d of devicesById.values()) {
+    if (isHidden(d)) hidden.add(d.instanceId);
+  }
+  if (hidden.size === 0) return { devicesById, childrenByParent, parentByChild };
+
+  const nextDevices = new Map<string, DeviceInfo>();
+  for (const [id, d] of devicesById) {
+    if (!hidden.has(id)) nextDevices.set(id, d);
+  }
+
+  /** Nearest ancestor that survives, walking up through hidden ones. */
+  const memo = new Map<string, string | undefined>();
+  const visibleParent = (id: string): string | undefined => {
+    const cached = memo.get(id);
+    if (cached !== undefined || memo.has(id)) return cached;
+    memo.set(id, undefined); // cycle guard — resolved below
+    let pid = parentByChild.get(id);
+    const seen = new Set<string>([id]);
+    while (pid && hidden.has(pid) && !seen.has(pid)) {
+      seen.add(pid);
+      pid = parentByChild.get(pid);
+    }
+    // A parent loop through hidden nodes can walk back around to `id` itself.
+    // Rooting it there would make it its own parent, and the forest builder —
+    // which only starts from nodes with no in-set parent — would never emit it
+    // or anything below it.
+    const result = pid && pid !== id && nextDevices.has(pid) ? pid : undefined;
+    memo.set(id, result);
+    return result;
+  };
+
+  const nextParent = new Map<string, string>();
+  const nextChildren = new Map<string, Set<string>>();
+  for (const id of nextDevices.keys()) {
+    const pid = visibleParent(id);
+    if (!pid) continue;
+    nextParent.set(id, pid);
+    let kids = nextChildren.get(pid);
+    if (!kids) nextChildren.set(pid, (kids = new Set()));
+    kids.add(id);
+  }
+
+  return { devicesById: nextDevices, childrenByParent: nextChildren, parentByChild: nextParent };
+}
+
 /** Eldest (largest subtree) first, then alphabetical by name. */
 function byEldest(a: TopoNode, b: TopoNode): number {
   if (b.descendantCount !== a.descendantCount) return b.descendantCount - a.descendantCount;

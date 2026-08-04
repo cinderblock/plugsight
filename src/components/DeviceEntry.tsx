@@ -98,8 +98,14 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
       style={{ 'grid-template-rows': isVisible() ? '1fr' : '0fr' }}
     >
       <div class="overflow-hidden">
+        {/* Transition properties are listed explicitly rather than using
+            `transition-all`: with `all`, a density change animates the padding on
+            every row at once, which both thrashes layout and fires a bubbling
+            `transitionend` per property per row — enough to stall the app for
+            seconds via RelationArrows' measure pass. Density now applies
+            instantly; only the paint-only properties animate. */}
         <button
-          class={`device-entry group w-full text-left flex items-center gap-3 px-3 ${densityClass()} rounded-r-lg transition-all duration-200
+          class={`device-entry group w-full text-left flex items-center gap-3 px-3 ${densityClass()} rounded-r-lg transition-[color,background-color,border-color,box-shadow,opacity] duration-200
         ${borderClass()}
         ${isGhost() ? 'opacity-45 bg-gray-50 dark:bg-gray-800/30' : ''}
         ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-300 dark:ring-blue-700' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}

@@ -133,7 +133,8 @@
 /* When a live device transitions to ghost state, this is handled by
    SolidJS reactivity changing the classes on DeviceEntry. The actual
    opacity/style change is handled by Tailwind's transition utilities
-   on the component (transition-all duration-200). */
+   on the component — an explicit paint-only property list, not
+   `transition-all`; see the note in DeviceEntry.tsx. */
 
 /* ── Status badge pulse ─────────────────────────────────────────────── */
 

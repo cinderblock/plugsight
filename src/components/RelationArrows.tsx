@@ -111,13 +111,28 @@ const RelationArrows: Component<{ container: () => HTMLElement | undefined }> = 
 
     const { childrenByParent, parentByChild } = relationIndex();
 
+    /** Per-sweep rect cache. A sweep measures every row in the tree, and each
+     *  row's `visibleHeight` walks its ancestors — so the same category/drawer
+     *  boxes get re-measured hundreds of times. Nothing here mutates layout
+     *  (the only writes are setDims/setSegments at the very end), so rects are
+     *  stable for the whole pass and safe to reuse. */
+    const rects = new Map<HTMLElement, DOMRect>();
+    const rectOf = (el: HTMLElement): DOMRect => {
+      let r = rects.get(el);
+      if (!r) {
+        r = el.getBoundingClientRect();
+        rects.set(el, r);
+      }
+      return r;
+    };
+
     const rows = new Map<string, HTMLElement>();
     container.querySelectorAll<HTMLElement>('[data-instance-id]').forEach(el => {
       const id = el.dataset.instanceId;
       if (id && !rows.has(id)) rows.set(id, el);
     });
 
-    const cRect = container.getBoundingClientRect();
+    const cRect = rectOf(container);
     const sx = container.scrollLeft;
     const sy = container.scrollTop;
     const clientW = container.clientWidth;
@@ -126,12 +141,12 @@ const RelationArrows: Component<{ container: () => HTMLElement | undefined }> = 
      *  inside a collapsed (grid 0fr) drawer keep their natural rect height —
      *  the raw rect can't tell hidden rows apart from rendered ones. */
     const visibleHeight = (el: HTMLElement): number => {
-      const r = el.getBoundingClientRect();
+      const r = rectOf(el);
       let top = r.top;
       let bottom = r.bottom;
       for (let p = el.parentElement; p && p !== container; p = p.parentElement) {
         if (!p.classList.contains('overflow-hidden')) continue;
-        const pr = p.getBoundingClientRect();
+        const pr = rectOf(p);
         top = Math.max(top, pr.top);
         bottom = Math.min(bottom, pr.bottom);
       }
@@ -147,7 +162,7 @@ const RelationArrows: Component<{ container: () => HTMLElement | undefined }> = 
         if (visibleHeight(el) > 3) return el;
         // Find the collapsed wrapper doing the clipping…
         let clip = el.parentElement;
-        while (clip && clip !== container && clip.getBoundingClientRect().height > 3) {
+        while (clip && clip !== container && rectOf(clip).height > 3) {
           clip = clip.parentElement;
         }
         if (!clip || clip === container) return null;
@@ -161,22 +176,26 @@ const RelationArrows: Component<{ container: () => HTMLElement | undefined }> = 
       return null;
     };
 
-    const measure = (el: HTMLElement): RowBox => {
-      const rr = el.getBoundingClientRect();
+    // Anchor and related rows are measured again after the obstacle sweep has
+    // already covered them, so results are memoized. Callers mutate `proxy` on
+    // what they get back, so each call hands out its own copy.
+    const boxCache = new Map<HTMLElement, RowBox>();
+    const measureUncached = (el: HTMLElement): RowBox => {
+      const rr = rectOf(el);
       const firstChild = (el.firstElementChild as HTMLElement | null) ?? el;
       // Rightmost always-visible content: the name line's end marker plus any
       // tagged extents (secondary text, trailing badges). Extents are clamped
       // to their parent box so truncated text doesn't over-report its width.
       let right = -Infinity;
       const labelEnd = el.querySelector<HTMLElement>('[data-role="label-end"]');
-      if (labelEnd) right = labelEnd.getBoundingClientRect().right;
+      if (labelEnd) right = rectOf(labelEnd).right;
       el.querySelectorAll<HTMLElement>('[data-arrow-extent]').forEach(ex => {
-        const exr = ex.getBoundingClientRect();
-        const boxRight = (ex.parentElement ?? ex).getBoundingClientRect().right;
+        const exr = rectOf(ex);
+        const boxRight = rectOf(ex.parentElement ?? ex).right;
         right = Math.max(right, Math.min(exr.right, boxRight));
       });
       if (right === -Infinity) right = rr.right;
-      const lr = firstChild.getBoundingClientRect();
+      const lr = rectOf(firstChild);
       return {
         midY: (rr.top + rr.bottom) / 2 - cRect.top + sy,
         height: visibleHeight(el),
@@ -184,6 +203,14 @@ const RelationArrows: Component<{ container: () => HTMLElement | undefined }> = 
         rightStop: right - cRect.left + sx + PAD,
         rowRight: rr.right - cRect.left + sx + PAD,
       };
+    };
+    const measure = (el: HTMLElement): RowBox => {
+      let b = boxCache.get(el);
+      if (!b) {
+        b = measureUncached(el);
+        boxCache.set(el, b);
+      }
+      return { ...b };
     };
 
     // Every row-like element is an obstacle the vertical buses must clear —
@@ -297,25 +324,50 @@ const RelationArrows: Component<{ container: () => HTMLElement | undefined }> = 
     setSegments(out);
   };
 
+  /**
+   * Coalesce recomputes to one per animation frame.
+   *
+   * Every trigger below arrives in bursts: `transitionend` fires once per
+   * animated property per element and bubbles from all several-hundred rows, so
+   * a single density change or filter clear used to schedule a thousand-odd
+   * sweeps back to back. Each sweep measures the whole tree, so running them
+   * synchronously turned an O(N) pass into O(N²) forced reflow and froze the app
+   * for ~20s. Scroll and resize burst the same way.
+   *
+   * Nothing is lost by deferring: `transitionend` already fires only at the end
+   * of an animation, so the arrows were never live during one — they snapped
+   * into place afterwards, and still do.
+   */
+  let queued = 0;
+  const schedule = () => {
+    if (queued) return;
+    queued = requestAnimationFrame(() => {
+      queued = 0;
+      recompute();
+    });
+  };
+  onCleanup(() => {
+    if (queued) cancelAnimationFrame(queued);
+  });
+
   createEffect(() => {
     selectedId();
     hoveredId();
     relationIndex();
     linkMode();
-    recompute();
+    schedule();
   });
 
   onMount(() => {
     const container = props.container();
     if (!container) return;
-    const onChange = () => recompute();
-    container.addEventListener('scroll', onChange, { passive: true });
-    container.addEventListener('transitionend', onChange);
-    const ro = new ResizeObserver(onChange);
+    container.addEventListener('scroll', schedule, { passive: true });
+    container.addEventListener('transitionend', schedule);
+    const ro = new ResizeObserver(schedule);
     ro.observe(container);
     onCleanup(() => {
-      container.removeEventListener('scroll', onChange);
-      container.removeEventListener('transitionend', onChange);
+      container.removeEventListener('scroll', schedule);
+      container.removeEventListener('transitionend', schedule);
       ro.disconnect();
     });
   });

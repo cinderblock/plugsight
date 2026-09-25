@@ -21,9 +21,9 @@ const PORTS_CLASS_GUID: &str = "{4d36e978-e325-11ce-bfc1-08002be10318}";
 /// through every device information element.
 pub fn enumerate_all_devices() -> Vec<DeviceInfo> {
     let mut devices = Vec::new();
-    // Hub handles stay open across the pass so each hub is opened once, not
-    // once per device plugged into it.
-    let mut hubs = link::HubProbe::new();
+    // Hub handles and the network interface table are fetched once per pass,
+    // not once per device.
+    let mut links = link::LinkProbe::new();
 
     unsafe {
         let dev_info_set =
@@ -50,7 +50,7 @@ pub fn enumerate_all_devices() -> Vec<DeviceInfo> {
                 break;
             }
 
-            if let Some(device) = build_device_info(dev_info_set, &dev_info_data, &mut hubs) {
+            if let Some(device) = build_device_info(dev_info_set, &dev_info_data, &mut links) {
                 devices.push(device);
             }
 
@@ -99,8 +99,8 @@ pub fn get_device_by_instance_id(instance_id: &str) -> Option<DeviceInfo> {
         );
 
         let device = if result.is_ok() {
-            let mut hubs = link::HubProbe::new();
-            build_device_info(dev_info_set, &dev_info_data, &mut hubs)
+            let mut links = link::LinkProbe::new();
+            build_device_info(dev_info_set, &dev_info_data, &mut links)
         } else {
             None
         };
@@ -114,7 +114,7 @@ pub fn get_device_by_instance_id(instance_id: &str) -> Option<DeviceInfo> {
 fn build_device_info(
     dev_info: HDEVINFO,
     dev_data: &SP_DEVINFO_DATA,
-    hubs: &mut link::HubProbe,
+    link_probe: &mut link::LinkProbe,
 ) -> Option<DeviceInfo> {
     let instance_id = properties::get_instance_id(dev_info, dev_data);
     if instance_id.is_empty() {
@@ -140,9 +140,10 @@ fn build_device_info(
         None
     };
 
-    // Link speed is a bus-specific fact: PCIe endpoints carry it as device
-    // properties, USB devices have to be asked about via their hub.
-    let link = link::probe_link(&instance_id, &parent_id, dev_info, dev_data, hubs);
+    // Link speeds are bus-specific facts: PCIe endpoints carry them as device
+    // properties, USB devices are asked about via their hub, network adapters
+    // via the interface table, SATA drives via their IDENTIFY data.
+    let links = link_probe.links(&instance_id, &parent_id, &class_guid, dev_info, dev_data);
 
     // Resolve the canonical class name + icon ID from our known-class table,
     // falling back to the SetupAPI-provided name for unknown GUIDs.
@@ -162,7 +163,7 @@ fn build_device_info(
         hardware_ids,
         parent_id,
         port_name,
-        link,
+        links,
         is_present: true,
     })
 }

@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { LinkInfo, UsbSpeed } from './types';
-import { describeLink, linkSearchText, pcieLabel } from './link-speed';
+import { describeLink, formatBps, linkSearchText, pcieLabel } from './link-speed';
 
 const usb = (speed: UsbSpeed, capable: UsbSpeed = speed, portUsb3 = true, companionConnected = false): LinkInfo => ({
   bus: 'usb',
@@ -21,6 +21,19 @@ const pcie = (generation: number, width: number, maxGeneration = generation, max
   maxGeneration,
   maxWidth,
 });
+
+const M = 1_000_000;
+const G = 1_000_000_000;
+
+const ethernet = (speedBps: number, maxBps: number | null = speedBps, forced = false, connected = true): LinkInfo => ({
+  bus: 'ethernet',
+  speedBps: connected ? speedBps : 0,
+  connected,
+  maxBps,
+  forced,
+});
+
+const sata = (generation: number, maxGeneration = generation): LinkInfo => ({ bus: 'sata', generation, maxGeneration });
 
 describe('describeLink (USB)', () => {
   test('a device running at its own best speed is not degraded', () => {
@@ -101,21 +114,106 @@ describe('describeLink (PCIe)', () => {
   });
 });
 
+describe('describeLink (Ethernet)', () => {
+  test('a gigabit adapter at gigabit is a quiet LAN chip', () => {
+    const s = describeLink(ethernet(G));
+    expect(s.prefix).toBe('LAN');
+    expect(s.speed).toBe('1 Gbps');
+    expect(s.degraded).toBe(false);
+    expect(s.showCapable).toBe(false);
+    expect(s.note).toBeNull();
+  });
+
+  test('a gigabit adapter that negotiated 100 Mbps is degraded and names the usual causes', () => {
+    const s = describeLink(ethernet(100 * M, G));
+    expect(s.degraded).toBe(true);
+    expect(s.speed).toBe('100 Mbps');
+    expect(s.capable).toBe('1 Gbps');
+    expect(s.note).toMatch(/four wire pairs/);
+  });
+
+  test('a speed fixed by hand is shown, not flagged', () => {
+    const s = describeLink(ethernet(100 * M, G, true));
+    expect(s.degraded).toBe(false);
+    expect(s.showCapable).toBe(true);
+    expect(s.note).toMatch(/Speed & Duplex setting fixes the link at 100 Mbps/);
+  });
+
+  test('no cable is a neutral "no link", with the capable speed still on offer', () => {
+    const s = describeLink(ethernet(0, 2_500 * M, false, false));
+    expect(s.speed).toBe('no link');
+    expect(s.degraded).toBe(false);
+    expect(s.showCapable).toBe(true);
+    expect(s.capable).toBe('2.5 Gbps');
+  });
+
+  test('an adapter whose options could not be read shows its speed and nothing more', () => {
+    const s = describeLink(ethernet(G, null));
+    expect(s.degraded).toBe(false);
+    expect(s.showCapable).toBe(false);
+  });
+});
+
+describe('describeLink (SATA)', () => {
+  test('a 6 Gbps drive at 6 Gbps', () => {
+    const s = describeLink(sata(3));
+    expect(s.prefix).toBe('SATA');
+    expect(s.speed).toBe('6 Gbps');
+    expect(s.speedDetail).toBe('6 Gbps (SATA III)');
+    expect(s.degraded).toBe(false);
+  });
+
+  test('a 6 Gbps drive that came up at 3 Gbps is degraded', () => {
+    const s = describeLink(sata(2, 3));
+    expect(s.degraded).toBe(true);
+    expect(s.capable).toBe('6 Gbps');
+    expect(s.note).toMatch(/controller port|cable/);
+  });
+});
+
+describe('formatBps', () => {
+  test('says speeds the way spec sheets do', () => {
+    expect(formatBps(10 * M)).toBe('10 Mbps');
+    expect(formatBps(100 * M)).toBe('100 Mbps');
+    expect(formatBps(G)).toBe('1 Gbps');
+    expect(formatBps(2_500 * M)).toBe('2.5 Gbps');
+    expect(formatBps(10 * G)).toBe('10 Gbps');
+  });
+});
+
 describe('linkSearchText', () => {
-  test('is empty without a link', () => {
-    expect(linkSearchText(null)).toBe('');
+  test('is empty without links', () => {
+    expect(linkSearchText([])).toBe('');
   });
 
   test('matches the chip text and the spec name', () => {
-    const text = linkSearchText(usb('high'));
+    const text = linkSearchText([usb('high')]);
     expect(text).toContain('480 mbps');
     expect(text).toContain('usb 2.0');
     expect(text).not.toContain('degraded');
   });
 
   test('a degraded link is findable as such, and by its capable speed', () => {
-    const text = linkSearchText(pcie(1, 4, 3, 4));
+    const text = linkSearchText([pcie(1, 4, 3, 4)]);
     expect(text).toContain('degraded');
     expect(text).toContain('gen3');
+  });
+
+  test('"lan" finds network adapters, not every PCIe device with lanes', () => {
+    expect(linkSearchText([pcie(3, 4)])).not.toContain('lan');
+    expect(linkSearchText([ethernet(G)])).toContain('lan');
+  });
+
+  test('PCIe width is findable as typed, with an ASCII x', () => {
+    expect(linkSearchText([pcie(3, 4)])).toContain('gen3 x4');
+  });
+
+  test('covers every link on a device with two', () => {
+    // A USB network adapter: the USB bus link, then its Ethernet port.
+    const text = linkSearchText([usb('high'), ethernet(G, 2_500 * M)]);
+    expect(text).toContain('480 mbps');
+    expect(text).toContain('lan');
+    expect(text).toContain('1 gbps');
+    expect(text).toContain('degraded');
   });
 });

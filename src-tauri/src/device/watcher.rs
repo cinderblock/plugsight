@@ -13,7 +13,12 @@
 //!    covers legacy classes like `Ports (COM & LPT)` which don't reliably
 //!    surface as WinRT device-interface events.
 //!
-//! Both sources call into the same debounced `trigger_reenumerate`, so
+//! 3. **IP Helper `NotifyIpInterfaceChange`** — not a device event at all,
+//!    but an Ethernet cable unplug or speed renegotiation changes a network
+//!    adapter's link chip without any PnP activity, and this is where that
+//!    shows up.
+//!
+//! All sources call into the same debounced `trigger_reenumerate`, so
 //! duplicate notifications for the same physical event coalesce into one
 //! re-enumeration. Neither source's IDs are usable with SetupAPI directly,
 //! so we always re-enumerate via SetupAPI and diff against the last known
@@ -41,6 +46,12 @@ use windows::Win32::Devices::DeviceAndDriverInstallation::{
     CM_NOTIFY_FILTER_0, CM_NOTIFY_FILTER_FLAG_ALL_DEVICE_INSTANCES,
     CM_NOTIFY_FILTER_TYPE_DEVICEINSTANCE, CM_Register_Notification, CR_SUCCESS, HCMNOTIFICATION,
 };
+
+use windows::Win32::Foundation::{HANDLE, NO_ERROR};
+use windows::Win32::NetworkManagement::IpHelper::{
+    MIB_IPINTERFACE_ROW, MIB_NOTIFICATION_TYPE, NotifyIpInterfaceChange,
+};
+use windows::Win32::Networking::WinSock::AF_UNSPEC;
 
 use super::enumerator;
 use super::types::{DeviceEvent, DeviceInfo, InstanceId};
@@ -178,13 +189,69 @@ pub fn start_watcher(app_handle: AppHandle) -> Result<(), String> {
     // Catches PnP node changes for legacy classes (e.g. Ports/COM) that the
     // WinRT DeviceWatcher misses. Failure here is non-fatal — the WinRT
     // watcher still covers the common cases — so we log and continue.
-    if let Err(e) = register_cm_notification(app_handle, shared) {
+    if let Err(e) = register_cm_notification(app_handle.clone(), shared.clone()) {
         log::warn!(
             "CM_Register_Notification setup failed; legacy device classes may not update incrementally: {e}"
         );
     }
 
+    // ── NotifyIpInterfaceChange ─────────────────────────────────────────
+    // An Ethernet cable being unplugged, or a link renegotiating to another
+    // speed, changes a network adapter's link without any PnP event. The IP
+    // interface above it does change state, so that's the trigger for
+    // refreshing Ethernet link chips. Non-fatal for the same reason as above.
+    if let Err(e) = register_ip_interface_notification(app_handle, shared) {
+        log::warn!(
+            "NotifyIpInterfaceChange setup failed; Ethernet link speeds won't refresh live: {e}"
+        );
+    }
+
     Ok(())
+}
+
+/// Register for IP interface changes (connect, disconnect, parameter changes)
+/// on every adapter, funnelled into the same debounced re-enumeration as the
+/// PnP sources. IPv4 and IPv6 each report a change, and a renegotiation fires
+/// several; the debounce folds them into one pass.
+fn register_ip_interface_notification(app: AppHandle, shared: SharedState) -> Result<(), String> {
+    let context = Box::new(CmCallbackContext { app, shared });
+    let context_ptr = Box::into_raw(context) as *const c_void;
+
+    let mut handle = HANDLE::default();
+    let result = unsafe {
+        NotifyIpInterfaceChange(
+            AF_UNSPEC,
+            Some(ip_interface_callback),
+            Some(context_ptr),
+            false,
+            &mut handle,
+        )
+    };
+    if result != NO_ERROR {
+        unsafe {
+            drop(Box::from_raw(context_ptr as *mut CmCallbackContext));
+        }
+        return Err(format!("NotifyIpInterfaceChange failed: {result:?}"));
+    }
+
+    // Like the CM registration: the handle stays registered for the app's
+    // lifetime and process exit cleans it up.
+    let _ = handle;
+    log::info!("NotifyIpInterfaceChange registered successfully");
+    Ok(())
+}
+
+/// IP interface change callback, on a system worker thread.
+unsafe extern "system" fn ip_interface_callback(
+    context: *const c_void,
+    _row: *const MIB_IPINTERFACE_ROW,
+    _notification_type: MIB_NOTIFICATION_TYPE,
+) {
+    if context.is_null() {
+        return;
+    }
+    let ctx = unsafe { &*(context as *const CmCallbackContext) };
+    trigger_reenumerate(ctx.app.clone(), ctx.shared.clone());
 }
 
 /// Context passed to the CM notification callback. Boxed and intentionally
@@ -381,6 +448,6 @@ fn device_changed(old: &DeviceInfo, new: &DeviceInfo) -> bool {
         || old.driver_version != new.driver_version
         || old.manufacturer != new.manufacturer
         || old.class_name != new.class_name
-        || old.link != new.link
+        || old.links != new.links
         || old.is_present != new.is_present
 }

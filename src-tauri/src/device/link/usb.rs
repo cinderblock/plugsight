@@ -1,12 +1,6 @@
-//! Upstream link speed probes: how fast is the wire between a device and
-//! whatever it's plugged into, and how fast could it be?
+//! USB: the speed a device negotiated with its hub port.
 //!
-//! Windows exposes this in two unrelated ways, so there are two probes:
-//!
-//! - **PCIe** endpoints carry `DEVPKEY_PciDevice_{Current,Max}Link{Speed,Width}`
-//!   as ordinary device properties. Root ports and switch ports don't report
-//!   them (observed on Windows 11), so only endpoints get a link.
-//! - **USB** devices know nothing about their own speed; their *hub* does. We
+//! - USB devices know nothing about their own speed; their *hub* does. We
 //!   open the parent hub's `GUID_DEVINTERFACE_USB_HUB` interface and ask it
 //!   about the port the device sits on (`DEVPKEY_Device_Address`), the same
 //!   way USBView does. `IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX` gives
@@ -40,10 +34,8 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 
 use windows::Win32::Devices::DeviceAndDriverInstallation::{
-    CM_GET_DEVICE_INTERFACE_LIST_PRESENT, CM_Get_DevNode_PropertyW, CM_Get_Device_ID_Size,
-    CM_Get_Device_IDW, CM_Get_Device_Interface_List_SizeW, CM_Get_Device_Interface_ListW,
-    CM_Get_Parent, CM_LOCATE_DEVNODE_NORMAL, CM_Locate_DevNodeW, CR_SUCCESS, HDEVINFO,
-    SP_DEVINFO_DATA,
+    CM_Get_DevNode_PropertyW, CM_Get_Device_ID_Size, CM_Get_Device_IDW, CM_Get_Parent,
+    CM_LOCATE_DEVNODE_NORMAL, CM_Locate_DevNodeW, CR_SUCCESS, HDEVINFO, SP_DEVINFO_DATA,
 };
 use windows::Win32::Devices::Properties::{DEVPROPKEY, DEVPROPTYPE};
 use windows::Win32::Devices::Usb::{
@@ -60,29 +52,8 @@ use windows::Win32::Storage::FileSystem::{
 use windows::Win32::System::IO::DeviceIoControl;
 use windows::core::{GUID, PCWSTR};
 
-use super::properties::get_u32_property;
-use super::types::{LinkInfo, UsbSpeed};
-
-// ── DEVPKEYs (pciprop.h / devpkey.h) ─────────────────────────────────────
-
-const PCI_DEVICE_FMTID: GUID = GUID::from_u128(0x3ab22e31_8264_4b4e_9af5_a8d2d8e33e62);
-
-const DEVPKEY_PCI_DEVICE_CURRENT_LINK_SPEED: DEVPROPKEY = DEVPROPKEY {
-    fmtid: PCI_DEVICE_FMTID,
-    pid: 9,
-};
-const DEVPKEY_PCI_DEVICE_CURRENT_LINK_WIDTH: DEVPROPKEY = DEVPROPKEY {
-    fmtid: PCI_DEVICE_FMTID,
-    pid: 10,
-};
-const DEVPKEY_PCI_DEVICE_MAX_LINK_SPEED: DEVPROPKEY = DEVPROPKEY {
-    fmtid: PCI_DEVICE_FMTID,
-    pid: 11,
-};
-const DEVPKEY_PCI_DEVICE_MAX_LINK_WIDTH: DEVPROPKEY = DEVPROPKEY {
-    fmtid: PCI_DEVICE_FMTID,
-    pid: 12,
-};
+use super::super::properties::get_u32_property;
+use super::super::types::{LinkInfo, UsbSpeed};
 
 /// Bus-specific address; for USB devices, the hub port number (1-based).
 const DEVPKEY_DEVICE_ADDRESS: DEVPROPKEY = DEVPROPKEY {
@@ -106,48 +77,11 @@ const FLAG_SUPER_SPEED_PLUS_CAPABLE_OR_HIGHER: u32 = 1 << 3;
 /// USB allows at most 5 tiers of hubs below the root.
 const MAX_TWIN_DEPTH: u8 = 8;
 
-/// Probe whichever link the device's bus has. `None` for buses we don't
-/// understand, for devices with no upstream link (root hubs, host
-/// controllers), and whenever Windows declines to tell us.
-pub fn probe_link(
-    instance_id: &str,
-    parent_id: &str,
-    dev_info: HDEVINFO,
-    dev_data: &SP_DEVINFO_DATA,
-    hubs: &mut HubProbe,
-) -> Option<LinkInfo> {
-    let prefix = instance_id.get(..4)?.to_ascii_uppercase();
-    match prefix.as_str() {
-        "PCI\\" => pcie_link(dev_info, dev_data),
-        "USB\\" => hubs.usb_link(parent_id, dev_info, dev_data),
-        _ => None,
-    }
-}
-
-/// PCIe link from the endpoint's own properties. All four must be present:
-/// a current speed without a max (or vice versa) can't say whether the link
-/// is degraded, and partial data would render as a confident-looking chip.
-fn pcie_link(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> Option<LinkInfo> {
-    let generation = get_u32_property(dev_info, dev_data, &DEVPKEY_PCI_DEVICE_CURRENT_LINK_SPEED)?;
-    let width = get_u32_property(dev_info, dev_data, &DEVPKEY_PCI_DEVICE_CURRENT_LINK_WIDTH)?;
-    let max_generation = get_u32_property(dev_info, dev_data, &DEVPKEY_PCI_DEVICE_MAX_LINK_SPEED)?;
-    let max_width = get_u32_property(dev_info, dev_data, &DEVPKEY_PCI_DEVICE_MAX_LINK_WIDTH)?;
-    if generation == 0 || width == 0 || max_generation == 0 || max_width == 0 {
-        return None;
-    }
-    Some(LinkInfo::Pcie {
-        generation,
-        width,
-        max_generation,
-        max_width,
-    })
-}
-
 /// Opens USB hubs on demand and keeps them open for the life of the probe,
 /// so one enumeration pass opens each hub once rather than once per child.
 /// Non-hub parents (composite devices) are remembered as `None` so they're
 /// not looked up again either.
-pub struct HubProbe {
+pub(super) struct HubProbe {
     /// Hubs opened through their PnP instance ID (upper-cased key).
     by_instance: HashMap<String, Option<HubHandle>>,
     /// Hubs opened through the symbolic link name another hub reported for
@@ -174,7 +108,7 @@ impl HubProbe {
     }
 
     /// Ask the device's parent hub what speed the device's port negotiated.
-    fn usb_link(
+    pub(super) fn usb_link(
         &mut self,
         parent_id: &str,
         dev_info: HDEVINFO,
@@ -275,7 +209,7 @@ impl HubHandle {
     /// Open the hub interface of the device with this instance ID, or `None`
     /// if it isn't a hub (no interface of that class) or can't be opened.
     fn open_instance(instance_id: &str) -> Option<Self> {
-        let path = hub_interface_path(instance_id)?;
+        let path = super::interface_path(instance_id, &GUID_DEVINTERFACE_USB_HUB)?;
         Self::open_path(&path, instance_id)
     }
 
@@ -566,45 +500,5 @@ fn upstream_of(instance_id: &str) -> Option<(String, u32)> {
         }
         let end = buffer.iter().position(|&c| c == 0).unwrap_or(buffer.len());
         Some((String::from_utf16_lossy(&buffer[..end]), port))
-    }
-}
-
-/// The first `GUID_DEVINTERFACE_USB_HUB` interface path of a device instance,
-/// as a NUL-terminated UTF-16 string. `None` when the device exposes no hub
-/// interface, i.e. it isn't a hub.
-fn hub_interface_path(instance_id: &str) -> Option<Vec<u16>> {
-    let wide_id: Vec<u16> = instance_id
-        .encode_utf16()
-        .chain(std::iter::once(0))
-        .collect();
-    unsafe {
-        let mut len = 0u32;
-        let cr = CM_Get_Device_Interface_List_SizeW(
-            &mut len,
-            &GUID_DEVINTERFACE_USB_HUB,
-            PCWSTR(wide_id.as_ptr()),
-            CM_GET_DEVICE_INTERFACE_LIST_PRESENT,
-        );
-        // An empty list is a single NUL (len 1): a device that isn't a hub.
-        if cr != CR_SUCCESS || len <= 1 {
-            return None;
-        }
-        let mut buffer = vec![0u16; len as usize];
-        let cr = CM_Get_Device_Interface_ListW(
-            &GUID_DEVINTERFACE_USB_HUB,
-            PCWSTR(wide_id.as_ptr()),
-            &mut buffer,
-            CM_GET_DEVICE_INTERFACE_LIST_PRESENT,
-        );
-        if cr != CR_SUCCESS {
-            return None;
-        }
-        // Double-NUL-terminated list; a hub has exactly one hub interface.
-        let end = buffer.iter().position(|&c| c == 0)?;
-        if end == 0 {
-            return None;
-        }
-        buffer.truncate(end + 1);
-        Some(buffer)
     }
 }

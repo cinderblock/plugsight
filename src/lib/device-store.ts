@@ -634,7 +634,7 @@ function matchesSearch(device: DeviceInfo, query: string): boolean {
   return (
     device.name.toLowerCase().includes(query) ||
     (device.portName?.toLowerCase().includes(query) ?? false) ||
-    linkSearchText(device.link).includes(query) ||
+    linkSearchText(device.links).includes(query) ||
     device.description.toLowerCase().includes(query) ||
     device.manufacturer.toLowerCase().includes(query) ||
     device.instanceId.toLowerCase().includes(query) ||

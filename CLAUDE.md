@@ -46,7 +46,7 @@ bun run version:bump minor --dry-run  # preview without writing
 - `src-tauri/src/device/watcher.rs` — Real-time PnP event stream (WinRT DeviceWatcher)
 - `src-tauri/src/device/enumerator.rs` — Full SetupAPI device enumeration
 - `src-tauri/src/device/properties.rs` — DEVPKEY property extraction helpers
-- `src-tauri/src/device/link.rs` — Upstream link speed probes (USB hub IOCTLs, PCIe link DEVPKEYs)
+- `src-tauri/src/device/link/` — Link speed probes, one module per bus: `usb.rs` (hub IOCTLs), `pcie.rs` (link DEVPKEYs), `ethernet.rs` (IP Helper table + Speed & Duplex options), `sata.rs` (ATA IDENTIFY via storage protocol query). Pure parsers have `cargo test` unit tests.
 - `src-tauri/src/device/class_meta.rs` — Device class GUID → name/icon mapping
 - `src-tauri/src/commands.rs` — Tauri IPC commands
 - `src/lib/device-store.ts` — Central SolidJS reactive store (devices, ghosts, categories)

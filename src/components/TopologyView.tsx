@@ -133,7 +133,7 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
 
         {/* Upstream link speed — this is the view where a slow link's place in
             the chain is visible, so the chip sits right on the row. */}
-        <LinkBadge link={device().link} />
+        <LinkBadge links={device().links} />
 
         {/* Action buttons (visible on hover) — div, not button, so they don't
             nest inside the clickable row. Hiding is not the same as collapsing:

@@ -38,9 +38,10 @@ pub struct DeviceInfo {
     /// Serial/parallel port name (e.g. "COM5", "LPT1") for devices in the
     /// Ports (COM & LPT) class; `None` for everything else.
     pub port_name: Option<String>,
-    /// Speed of the device's upstream link (USB hub port or PCIe link), when
-    /// the bus has such a notion and Windows reports it; `None` otherwise.
-    pub link: Option<LinkInfo>,
+    /// Speeds of the device's links, bus link first: the USB hub port or PCIe
+    /// link, then an Ethernet or SATA link when the device has one. A PCIe or
+    /// USB network adapter has both. Empty when Windows reports none.
+    pub links: Vec<LinkInfo>,
     /// Whether this device is currently present (connected).
     pub is_present: bool,
 }
@@ -84,6 +85,28 @@ pub enum LinkInfo {
         max_generation: u32,
         /// Widest link the device supports.
         max_width: u32,
+    },
+    /// A wired network adapter's link to its partner (switch, router, PC).
+    #[serde(rename_all = "camelCase")]
+    Ethernet {
+        /// Negotiated speed in bits per second; 0 when there's no link.
+        speed_bps: u64,
+        /// Whether a cable is plugged in and the link is up.
+        connected: bool,
+        /// Fastest speed the adapter's driver offers, if its options list
+        /// could be read.
+        max_bps: Option<u64>,
+        /// The speed was fixed by hand in the adapter's Speed & Duplex
+        /// setting rather than auto-negotiated.
+        forced: bool,
+    },
+    /// A SATA drive's link to its controller port.
+    #[serde(rename_all = "camelCase")]
+    Sata {
+        /// Negotiated generation (1 = 1.5 Gb/s, 2 = 3 Gb/s, 3 = 6 Gb/s).
+        generation: u32,
+        /// Highest generation the drive supports.
+        max_generation: u32,
     },
 }
 

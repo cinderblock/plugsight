@@ -16,8 +16,11 @@ export interface DeviceInfo {
   parentId: string;
   /** Serial/parallel port name (e.g. "COM5", "LPT1") for Ports-class devices; null otherwise. */
   portName: string | null;
-  /** Upstream link speed (USB hub port / PCIe link); null when the bus has none or Windows didn't say. */
-  link: LinkInfo | null;
+  /**
+   * Link speeds, bus link first (USB hub port / PCIe), then Ethernet or SATA.
+   * A USB or PCIe network adapter has two. Empty when Windows reports none.
+   */
+  links: LinkInfo[];
   isPresent: boolean;
 }
 
@@ -52,6 +55,23 @@ export type LinkInfo =
       width: number;
       maxGeneration: number;
       maxWidth: number;
+    }
+  | {
+      bus: 'ethernet';
+      /** Negotiated speed in bits per second; 0 when there's no link. */
+      speedBps: number;
+      /** A cable is plugged in and the link is up. */
+      connected: boolean;
+      /** Fastest option in the adapter's Speed & Duplex setting, if readable. */
+      maxBps: number | null;
+      /** The speed was fixed by hand rather than auto-negotiated. */
+      forced: boolean;
+    }
+  | {
+      bus: 'sata';
+      /** Negotiated generation (1 = 1.5 Gbps, 2 = 3 Gbps, 3 = 6 Gbps). */
+      generation: number;
+      maxGeneration: number;
     };
 
 /** Mirrors the Rust `DeviceStatus` enum. */

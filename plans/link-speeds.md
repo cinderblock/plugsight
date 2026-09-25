@@ -141,3 +141,80 @@ lane is running at a lower gen speed".
      (proposal: act on both).
    - Unmatched halves (twin not found, or USB 3 side down) stay as separate
      rows. That is the case the chips exist to expose, so never force a merge.
+
+## Phase 2: Ethernet + SATA (requested 2026-09-25, after v0.4.0)
+
+### Decisions
+
+- `DeviceInfo.link: Option<LinkInfo>` becomes `links: Vec<LinkInfo>`. A PCIe
+  NIC has a PCIe link *and* an Ethernet link; a USB NIC has a USB link and an
+  Ethernet link, and the USB one can be the bottleneck (480 Mbps bus under a
+  2.5 GbE port). One row, several chips.
+- Chips for these two buses carry a prefix (`LAN 1 Gbps`, `SATA 6 Gbps`) so a
+  row with two chips reads unambiguously. USB and PCIe chips stay bare.
+- Ethernet only: `MediaType == NdisMedium802_3`, `PhysicalMediumType ==
+  NdisPhysicalMedium802_3`, hardware interface, not a filter interface. Wi-Fi
+  is excluded on purpose: its rate moves every few seconds, and the tree only
+  refreshes on events, so a Wi-Fi chip would show a stale number as fact.
+- Ethernet "capable" = the fastest option in the driver's `*SpeedDuplex` list
+  (`Ndi\params\*SpeedDuplex\enum` under the driver key). Labels are parsed
+  ("1.0 Gbps Full Duplex", "2.5 Gbps", "100 Mbps") with the standardized
+  codes 1–7 as the fallback for labels that don't parse (localized drivers).
+  If `*SpeedDuplex` is not `0` (Auto), the speed was fixed by the user; that
+  is reported as `forced` and not flagged as degraded.
+- Ethernet disconnected: a neutral `LAN no link` chip, not amber.
+- SATA: disk-class devices only. Open the disk's `GUID_DEVINTERFACE_DISK`
+  path with zero access rights, `StorageDeviceProperty` for the bus type, and
+  only for `BusTypeSata` issue the protocol-specific ATA IDENTIFY query. Word
+  76 = supported generations (bits 1–3), word 77 bits 3:1 = negotiated
+  generation. No chip when word 77 doesn't report a current speed (pre-ACS-3
+  drives) — a max without a current can't say anything.
+- Live updates: Ethernet renegotiation is not a PnP event, so the watcher also
+  registers `NotifyIpInterfaceChange` and funnels it into the same debounced
+  re-enumeration.
+- `link.rs` splits into `link/{mod,usb,pcie,ethernet,sata}.rs`.
+- The pure parsers (IDENTIFY words, speed labels) get the repo's first Rust
+  unit tests; CI gains `cargo test`, `bun run typecheck`, and `bun test`,
+  none of which it ran before.
+
+### Findings
+
+- Probe on this machine (Intel I219-V): up at 1 Gbps; `*SpeedDuplex` = `0`;
+  enum values `0` Auto, `1` 10H, `2` 10F, `3` 100H, `4` 100F, `6` 1.0 Gbps FD.
+- **Non-admin access verified** (launched through `explorer.exe` so the token
+  is the normal filtered one, `elevated=False`): opening the disk interface
+  path with access `0` and issuing both `StorageDeviceProperty` (bus type 17 =
+  NVMe) and the protocol-specific IDENTIFY query succeeds. The ATA flavour is
+  the same IOCTL with `ProtocolTypeAta`; this machine has no SATA drive, so
+  that exact path is **untested on hardware**.
+- `runas /trustlevel:0x20000` is not a fair stand-in for a normal user.
+- The Bash tool collapses `\` to `\` inside heredocs and inline scripts, so
+  PowerShell or Python snippets with Windows paths must be written with the
+  Write tool. This caused two false "open failed err=2" results.
+
+### Steps
+
+1. [x] Rust: `links` vec, module split, Ethernet + SATA probes, watcher IP
+       notification, unit tests (11, all pass).
+2. [x] Frontend: types, wording + tests (41 pass), multi-chip badge, detail
+       sections, search.
+3. [x] CI: added typecheck, `bun run test`, `cargo test --lib`, and clippy
+       `--all-targets`.
+4. [x] Verified live; README + CLAUDE.md updated; committed.
+
+### Verification (live, `cargo tauri dev`)
+
+- Intel I219-V shows `LAN 1 Gbps` in both views; detail pane "Ethernet link /
+  Running at 1 Gbps".
+- Wi-Fi AX201 shows no chip (802.11 filtered out, as designed).
+- Samsung 970 EVO Plus (NVMe, bus type 17) shows no SATA chip: the bus-type
+  gate works. **The SATA chip itself has not been seen on real hardware**;
+  only the parser (unit tests) and the non-admin query path (NVMe stand-in)
+  are verified.
+- `NotifyIpInterfaceChange registered successfully`. No re-enumeration storm:
+  7 passes in the startup minute, none after — the same startup burst as
+  before the hook. **Not verified:** a real cable unplug/replug refreshing the
+  chip (no one at the machine to pull the cable).
+- Caught live: searching "lan" matched every PCIe device through "GT/s per
+  lane" in the search text. PCIe now contributes `gen3 x4` instead (tests
+  cover both directions).

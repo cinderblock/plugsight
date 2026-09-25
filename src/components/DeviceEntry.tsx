@@ -167,8 +167,8 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
               {/* Status badge (inline, next to name — NOT overlaid on icon!) */}
               <StatusBadge status={device().status} compact />
 
-              {/* Upstream link speed; amber when the device is running below what it can do. */}
-              <LinkBadge link={device().link} />
+              {/* Link speeds; amber when the device is running below what it can do. */}
+              <LinkBadge links={device().links} />
 
               {/* Zero-width marker at the end of the label, for relation connectors. */}
               <span data-role="label-end" aria-hidden="true" />

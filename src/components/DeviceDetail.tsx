@@ -112,31 +112,35 @@ const DeviceDetail: Component = () => {
               </Show>
             </div>
 
-            {/* Upstream link: the numbers the row chip abbreviates, spelled out */}
-            <Show when={device().link && describeLink(device().link!)}>
-              {link => (
-                <div class="mb-6">
-                  <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                    {link().title}
-                  </h3>
-                  <div class="space-y-3">
-                    <DetailRow label="Running at" value={link().speedDetail} />
-                    <Show when={link().degraded}>
-                      <DetailRow label="Capable of" value={link().capableDetail} />
-                    </Show>
-                    <Show when={link().note}>
-                      <p
-                        class={`text-sm ${
-                          link().degraded ? 'text-amber-700 dark:text-amber-400' : 'text-gray-600 dark:text-gray-300'
-                        }`}
-                      >
-                        {link().note}
-                      </p>
-                    </Show>
+            {/* Links: the numbers the row chips abbreviate, spelled out, one
+                section per link (a USB or PCIe network adapter has two). */}
+            <For each={device().links}>
+              {info => {
+                const link = () => describeLink(info);
+                return (
+                  <div class="mb-6">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                      {link().title}
+                    </h3>
+                    <div class="space-y-3">
+                      <DetailRow label="Running at" value={link().speedDetail} />
+                      <Show when={link().showCapable}>
+                        <DetailRow label="Capable of" value={link().capableDetail} />
+                      </Show>
+                      <Show when={link().note}>
+                        <p
+                          class={`text-sm ${
+                            link().degraded ? 'text-amber-700 dark:text-amber-400' : 'text-gray-600 dark:text-gray-300'
+                          }`}
+                        >
+                          {link().note}
+                        </p>
+                      </Show>
+                    </div>
                   </div>
-                </div>
-              )}
-            </Show>
+                );
+              }}
+            </For>
 
             {/* Properties grid */}
             <div class="space-y-3">

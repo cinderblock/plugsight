@@ -117,3 +117,27 @@ lane is running at a lower gen speed".
   `—`/`…` as single bytes into UTF-8 files once. Always `encoding='utf-8'`.
 - Don't read link speed through WinRT — `DeviceInformation` has no such
   property; the SetupAPI + hub IOCTL path is the only one.
+
+## Released
+
+- v0.4.0 (`de7bfe3`, tag `v0.4.0`) shipped this feature, 2026-09-25.
+
+## Open questions for the user
+
+1. **Merge the two logical halves of a USB 3 hub into one row?** (Asked by
+   Cameron during the v0.4.0 release.) Recommendation: yes, in the Connections
+   tree and the USB category's nested mode; keep the category view's flat
+   list raw. Feasible with data already in hand: `link.rs` finds each USB 2
+   half's SuperSpeed twin, and the twin's symbolic link name maps directly to
+   its instance ID (`USB#VID_0BDA&PID_0411#5&b5f8a98&0&14#{guid}` is
+   `USB\VID_0BDA&PID_0411\5&B5F8A98&0&14`). The backend would report a
+   `usbTwinId`; the topology transform would fold the pair into one node
+   whose children are the union of both halves. Design points to settle:
+   - The merged row's chip shows the USB 3 half's speed; each child keeps its
+     own chip, so a USB 2 device under a 5 Gbps hub reads correctly.
+   - Status is the worse of the two halves (a "Link in Compliance Mode" on
+     the USB 3 side must not hide behind a healthy USB 2 side).
+   - Detail pane lists both devnodes; Properties / Hide need a defined target
+     (proposal: act on both).
+   - Unmatched halves (twin not found, or USB 3 side down) stay as separate
+     rows. That is the case the chips exist to expose, so never force a merge.

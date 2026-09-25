@@ -62,7 +62,8 @@ bun run version:bump minor --dry-run  # preview without writing
 
 ## Conventions
 
-- **Bun** for JS package management (not npm)
+- **Bun** for JS package management (not npm). `bun.lock` is committed and CI installs with `--frozen-lockfile`.
+- **Tauri JS packages are pinned with `~`** to the same major.minor as their Rust crates (`@tauri-apps/plugin-updater` ↔ `tauri-plugin-updater`, etc.). `cargo tauri build` refuses mismatched minors, so bump each JS package and its crate together.
 - Frontend: TypeScript strict mode, Prettier formatting
 - Backend: Rust 2024 edition, `cargo fmt` + `cargo clippy`
 - Path alias: `~/` maps to `src/` in TypeScript imports

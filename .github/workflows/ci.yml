@@ -35,6 +35,12 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
+      - name: Typecheck frontend
+        run: bun run typecheck
+
+      - name: Frontend unit tests
+        run: bun run test
+
       - name: Build frontend
         run: bun run build
 
@@ -44,7 +50,11 @@ jobs:
 
       - name: Clippy
         working-directory: src-tauri
-        run: cargo clippy -- -D warnings -A dead_code
+        run: cargo clippy --all-targets -- -D warnings -A dead_code
+
+      - name: Rust unit tests
+        working-directory: src-tauri
+        run: cargo test --lib
 
       - name: Cargo fmt check
         working-directory: src-tauri

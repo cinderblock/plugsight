@@ -26,6 +26,7 @@
 import { execSync } from 'child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
 import { basename, join, resolve } from 'path';
+import { trustedCommentFields } from './minisign';
 
 // ── Paths ────────────────────────────────────────────────────────────────
 
@@ -183,26 +184,31 @@ function writeUpdaterManifest(): boolean {
 
   const signature = readFileSync(sig, 'utf8').trim();
 
-  // A signature over a *different* build verifies as tampering on the client,
-  // and the only symptom is that updates silently stop working. minisign records
-  // the signed filename in its trusted comment, so check it really is the
-  // installer we're publishing before advertising the pair as a matched set.
-  const signedName = Buffer.from(signature, 'base64')
-    .toString('utf8')
-    .match(/\bfile:(.+)/)?.[1]
-    ?.trim();
-  if (signedName && nsisExe && signedName !== basename(nsisExe)) {
-    console.error(
-      `\nRefusing to write latest.json: the signature is for "${signedName}" but the\n` +
-        `installer being published is "${basename(nsisExe)}". These are different builds.`,
-    );
-    process.exit(1);
-  }
-
   // The release tag this build will be published under. CI passes it through
   // (a tag push is the trigger); locally it's derived from the version, which
   // `bun run version:bump` keeps in sync across all three config files.
   const tag = process.env.RELEASE_TAG || `v${version()}`;
+
+  // A signature over a *different* build verifies as tampering on the client,
+  // and the only symptom is that updates silently stop working. minisign records
+  // what was signed in its trusted comment (the filename, and since Tauri CLI
+  // 2.11 the version too), so check both match what we're publishing before
+  // advertising the pair as a matched set.
+  const signed = trustedCommentFields(signature);
+  if (signed?.file && nsisExe && signed.file !== basename(nsisExe)) {
+    console.error(
+      `\nRefusing to write latest.json: the signature is for "${signed.file}" but the\n` +
+        `installer being published is "${basename(nsisExe)}". These are different builds.`,
+    );
+    process.exit(1);
+  }
+  if (signed?.version && signed.version !== tag.replace(/^v/, '')) {
+    console.error(
+      `\nRefusing to write latest.json: the signature is for version ${signed.version} but this\n` +
+        `release is ${tag}. The installer was built from a different version.`,
+    );
+    process.exit(1);
+  }
   const assetName = `${PRODUCT} Setup.exe`.replace(/ /g, '.'); // GitHub rewrites spaces to dots
   const assetUrl = `https://github.com/${GITHUB_REPO}/releases/download/${tag}/${assetName}`;
 

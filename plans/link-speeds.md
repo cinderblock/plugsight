@@ -118,9 +118,38 @@ lane is running at a lower gen speed".
 - Don't read link speed through WinRT — `DeviceInformation` has no such
   property; the SetupAPI + hub IOCTL path is the only one.
 
-## Released
+## Releases
 
-- v0.4.0 (`de7bfe3`, tag `v0.4.0`) shipped this feature, 2026-09-25.
+USB + PCIe link speeds were meant to ship as v0.4.0. It took three tags:
+
+- **v0.4.0** (`de7bfe3`): release build failed, "Found version mismatched
+  Tauri packages" (`@tauri-apps/plugin-updater` 2.12.0 vs crate 2.10.1,
+  `plugin-notification` 2.4.0 vs 2.3.3). Root cause: `bun.lock` had been in
+  `.gitignore` since the initial commit, so CI resolved caret ranges fresh
+  every run. Fixed in `a29325e`: lockfile committed, `--frozen-lockfile` in
+  both workflows, Tauri JS packages pinned `~` to their crates' minors. No
+  GitHub release exists for v0.4.0; the tag is left in place (deleting a
+  pushed tag needs Cameron's say-so).
+- **v0.4.1** (`ce244ca`): built and signed, then `collect-artifacts` refused
+  to write `latest.json` — Tauri CLI 2.11 (CI installs latest 2.x) appends
+  a tab and `version:X` to the minisign trusted comment, and the guard read
+  everything after `file:` as the filename. Fixed in `20ff949` by parsing the
+  trusted comment's tab-separated fields (`scripts/minisign.ts`, tested) and
+  also checking `version` against the tag. No GitHub release for v0.4.1.
+- **v0.4.2** (`ad45d57`): v0.4.1 + the collector fix only. Built in a
+  temporary worktree from the v0.4.1 tag so the unreleased Ethernet/SATA
+  commits didn't ride along; local `main` was then moved onto the same chain
+  (mixed reset, working tree untouched) so history stays linear.
+  **Published** (run 36198067438): installers, signatures, portable zip, and
+  `latest.json`. Checked the manifest: version 0.4.2, signature trusted
+  comment `file:PlugSight_0.4.2_x64-setup.exe` / `version:0.4.2`, installer
+  URL returns 200.
+- Ethernet + SATA (`0604aea`) and the CI test steps (`0eb075d`) are
+  committed locally and **not yet pushed or released**.
+
+CI also went red once in between: Rust 1.98 on the runner added
+`chunks_exact_to_as_chunks`, which the local 1.97 toolchain doesn't know
+(`cea3283`). Local clippy passing does not guarantee CI clippy passing.
 
 ## Open questions for the user
 

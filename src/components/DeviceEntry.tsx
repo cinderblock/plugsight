@@ -25,6 +25,7 @@ import {
 import { openDeviceProperties } from '~/lib/tauri';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
+import LinkBadge from './LinkBadge';
 
 interface DeviceEntryProps {
   displayDevice: DisplayDevice;
@@ -165,6 +166,9 @@ const DeviceEntry: Component<DeviceEntryProps> = props => {
 
               {/* Status badge (inline, next to name — NOT overlaid on icon!) */}
               <StatusBadge status={device().status} compact />
+
+              {/* Upstream link speed; amber when the device is running below what it can do. */}
+              <LinkBadge link={device().link} />
 
               {/* Zero-width marker at the end of the label, for relation connectors. */}
               <span data-role="label-end" aria-hidden="true" />

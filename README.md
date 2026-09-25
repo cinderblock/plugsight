@@ -45,11 +45,16 @@ In the **Categories** view, selecting a device draws orthogonal connectors to it
 
 The Connections view draws no arrows, and the toolbar button hides itself there: that tree's indentation already *is* the parent→child wiring, so every connector would restate the nesting it sits on.
 
+### Link Speeds
+Every USB device and PCIe endpoint carries a chip with the speed of its upstream link: **480 Mbps**, **5 Gbps**, **Gen3 ×4**. When a device runs below what it advertises — a USB 3 drive that came up at USB 2, an NVMe drive trained at Gen1 or with fewer lanes — the chip turns amber and shows both numbers inline (**480 Mbps of 5 Gbps**), so you can walk the Connections tree and see exactly where the chain slowed down. The detail panel spells it out and says whether the port only carries USB 2 or whether the port could do better (try another cable). Search matches the chip text, so "480 mbps" or "degraded" lists the slow links.
+
+USB speeds come from the parent hub (the same hub IOCTLs USBView uses). Windows lists a USB 3 hub as two logical hubs, one per speed; the USB 2 half advertises SuperSpeed while running at 480 Mbps, so PlugSight checks the port's SuperSpeed companion before calling a link degraded, and the detail panel says when a row is just the USB 2 side of a hub whose USB 3 side is up. PCIe comes from the `DEVPKEY_PciDevice_*Link*` device properties, which Windows only reports for endpoints — root and switch ports show no chip.
+
 ### Serial Port Notifications
 Get a **"COM5 connected"** popup the moment a serial port is plugged in or removed — an in-app toast when the PlugSight window is focused, or a native Windows notification when it's in the background. A toolbar bell button cycles what triggers a popup: off, COM/serial ports only, or every device change. The COM/LPT port name (read from the device's registry `PortName`) also appears in the detail panel.
 
 ### Search, Filter & Hide
-- **Full-text search** across device names, COM/LPT port names, descriptions, manufacturers, hardware IDs, and instance IDs. Works in both views, and matches never hide behind a collapsed category, hub, or group — including devices plugged in while the search is active.
+- **Full-text search** across device names, COM/LPT port names, link speeds, descriptions, manufacturers, hardware IDs, and instance IDs. Works in both views, and matches never hide behind a collapsed category, hub, or group — including devices plugged in while the search is active.
 - **"Problems only" toggle** filters the tree to show only devices with errors, warnings, or missing drivers.
 - **Hide individual devices or entire categories** to declutter the view — hidden state persists across sessions. Hiding removes exactly that one row: in the Connections tree the wiring closes up around it, and anything plugged into a hidden hub reparents to the nearest ancestor still showing rather than disappearing with it.
 - **Solo mode** on category headers isolates a single category, collapsing everything else.
@@ -165,8 +170,9 @@ EV certs earn instant SmartScreen reputation, so the "Unknown publisher" warning
 │  watcher.rs ──→ events ──→ frontend               │
 │  (WinRT DeviceWatcher: Added/Removed/Updated)     │
 │       │                                            │
-│  enumerator.rs + properties.rs                    │
-│  (SetupAPI: full property queries per device)     │
+│  enumerator.rs + properties.rs + link.rs          │
+│  (SetupAPI: full property queries per device;     │
+│   USB hub IOCTLs + PCIe DEVPKEYs for link speed)  │
 │       │                                            │
 │  class_icons.rs                                   │
 │  (SetupAPI: extracts native Windows device-class  │

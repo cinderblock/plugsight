@@ -25,6 +25,7 @@ function device(instanceId: string, name: string, parentId = ''): DeviceInfo {
     hardwareIds: [],
     parentId,
     portName: null,
+    link: null,
     isPresent: true,
   };
 }

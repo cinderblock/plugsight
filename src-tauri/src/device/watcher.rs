@@ -381,5 +381,6 @@ fn device_changed(old: &DeviceInfo, new: &DeviceInfo) -> bool {
         || old.driver_version != new.driver_version
         || old.manufacturer != new.manufacturer
         || old.class_name != new.class_name
+        || old.link != new.link
         || old.is_present != new.is_present
 }

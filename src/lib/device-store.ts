@@ -11,6 +11,7 @@
 
 import { createSignal, createMemo, createEffect, batch, onCleanup, onMount } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
+import { linkSearchText } from './link-speed';
 import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice } from './types';
 import { hasDeviceProblem } from './types';
 import { onDeviceEvent, getAllDevices } from './tauri';
@@ -633,6 +634,7 @@ function matchesSearch(device: DeviceInfo, query: string): boolean {
   return (
     device.name.toLowerCase().includes(query) ||
     (device.portName?.toLowerCase().includes(query) ?? false) ||
+    linkSearchText(device.link).includes(query) ||
     device.description.toLowerCase().includes(query) ||
     device.manufacturer.toLowerCase().includes(query) ||
     device.instanceId.toLowerCase().includes(query) ||

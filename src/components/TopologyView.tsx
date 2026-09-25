@@ -36,6 +36,7 @@ import {
 import { openDeviceProperties } from '~/lib/tauri';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
+import LinkBadge from './LinkBadge';
 
 /** Whether identical-sibling grouping applies (off while filtering, where the
  *  tree is forced open and grouped/dimmed-context rows would mislead). */
@@ -129,6 +130,10 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
             {props.node.children.length}
           </span>
         </Show>
+
+        {/* Upstream link speed — this is the view where a slow link's place in
+            the chain is visible, so the chip sits right on the row. */}
+        <LinkBadge link={device().link} />
 
         {/* Action buttons (visible on hover) — div, not button, so they don't
             nest inside the clickable row. Hiding is not the same as collapsing:

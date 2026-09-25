@@ -16,8 +16,43 @@ export interface DeviceInfo {
   parentId: string;
   /** Serial/parallel port name (e.g. "COM5", "LPT1") for Ports-class devices; null otherwise. */
   portName: string | null;
+  /** Upstream link speed (USB hub port / PCIe link); null when the bus has none or Windows didn't say. */
+  link: LinkInfo | null;
   isPresent: boolean;
 }
+
+/** Mirrors the Rust `UsbSpeed` enum, slowest to fastest. */
+export type UsbSpeed = 'low' | 'full' | 'high' | 'super' | 'superPlus';
+
+/**
+ * Mirrors the Rust `LinkInfo` enum: what a device's upstream link runs at and
+ * what it could run at. Facts only — wording and the degraded call live in
+ * `link-speed.ts`.
+ */
+export type LinkInfo =
+  | {
+      bus: 'usb';
+      /** Speed the hub port negotiated with the device. */
+      speed: UsbSpeed;
+      /** Fastest speed the device advertises; equals `speed` unless it's running slow. */
+      capable: UsbSpeed;
+      /** Whether the hub port itself carries USB 3 signalling. */
+      portUsb3: boolean;
+      /**
+       * Something is also connected on this port's SuperSpeed companion port:
+       * this is the USB 2 half of a USB 3 hub whose USB 3 half is its own row.
+       */
+      companionConnected: boolean;
+    }
+  | {
+      bus: 'pcie';
+      /** Current link generation (1 = 2.5 GT/s … 6 = 64 GT/s). */
+      generation: number;
+      /** Current lane count. */
+      width: number;
+      maxGeneration: number;
+      maxWidth: number;
+    };
 
 /** Mirrors the Rust `DeviceStatus` enum. */
 export type DeviceStatus =

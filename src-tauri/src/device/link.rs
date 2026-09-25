@@ -502,10 +502,10 @@ fn name_ioctl(hub: HANDLE, ioctl: u32, port: u32, header: usize) -> Option<Vec<u
 
 /// The NUL-terminated UTF-16 string starting at byte `offset`, if non-empty.
 fn wide_string_at(bytes: &[u8], offset: usize) -> Option<String> {
-    let name: Vec<u16> = bytes
-        .get(offset..)?
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+    let (pairs, _) = bytes.get(offset..)?.as_chunks::<2>();
+    let name: Vec<u16> = pairs
+        .iter()
+        .map(|&pair| u16::from_le_bytes(pair))
         .take_while(|&c| c != 0)
         .collect();
     if name.is_empty() {

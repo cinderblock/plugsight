@@ -42,7 +42,114 @@ import LinkBadge from './LinkBadge';
  *  tree is forced open and grouped/dimmed-context rows would mislead). */
 const groupingOn = () => groupIdentical() && !isFiltering();
 
-const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
+/* ── Parent→child tree lines ─────────────────────────────────────────────
+ *
+ * Every row shares the same left edge and indents with padding, so a parent's
+ * chevron sits at a fixed x for its depth. Its line set drops from just under
+ * that chevron and curves into each child row: an *elbow* (border-left +
+ * border-bottom with a rounded corner) inside the child row, and a *trunk*
+ * strip running on below it — through the lower half of the row and down the
+ * child's own children container — until the last sibling, where the trunk
+ * ends at the elbow. Everything is plain CSS on the rows themselves, so the
+ * lines follow collapse/filter/dim state for free with nothing to measure.
+ */
+
+/** Per-level indent in px; must match the row padding formula in the class. */
+const INDENT = 16;
+/** Number of muted hues in the palette (`--tree-line-0..N-1` in app.css). */
+const LINE_HUES = 5;
+/** Outer radius of the curve from a trunk into a child row. */
+const ELBOW_R = 8;
+/** Straight run past the curve toward the child's chevron. */
+const ELBOW_TAIL = 4;
+
+/** How a child row hangs off its parent's line set. */
+interface Branch {
+  /** Palette index shared by every line from this parent. */
+  hue: number;
+  /** Last sibling: the trunk stops at this row's elbow instead of running on. */
+  last: boolean;
+}
+
+/** x of the trunk a row at `childDepth` hangs from: its parent's chevron centre
+ *  (4px accent border + parent padding + half the 16px chevron). */
+const trunkX = (childDepth: number) => INDENT * childDepth + 4;
+
+/** Root-level parents draw thickest; each level down is thinner, to 1px. */
+const lineWidth = (parentDepth: number) => Math.max(1, 3 - parentDepth);
+
+/** Hue for a node's own line set: cycles by sibling position, skipping the hue
+ *  of the trunk it hangs from so nested trunks and adjacent siblings differ. */
+const ownHue = (index: number, parentHue: number | undefined) => {
+  if (parentHue === undefined) return index % LINE_HUES;
+  const h = index % (LINE_HUES - 1);
+  return h >= parentHue ? h + 1 : h;
+};
+
+/** A vertical run of the parent's trunk. `top` defaults to the container's top
+ *  edge; the row's lower-half piece starts where the elbow's curve peels off. */
+const Trunk: Component<{ branch: Branch; depth: number; top?: string }> = props => {
+  const w = () => lineWidth(props.depth - 1);
+  return (
+    <div
+      aria-hidden="true"
+      class="pointer-events-none absolute bottom-0"
+      style={{
+        top: props.top ?? '0',
+        left: `${trunkX(props.depth) - w() / 2}px`,
+        width: `${w()}px`,
+        background: `var(--tree-line-${props.branch.hue})`,
+      }}
+    />
+  );
+};
+
+/** The pieces of a connector that live inside a child row: the elbow curving
+ *  from the trunk into the row, and (unless last) the trunk's run on below. */
+const RowLines: Component<{ branch: Branch; depth: number }> = props => {
+  const w = () => lineWidth(props.depth - 1);
+  const color = () => `var(--tree-line-${props.branch.hue})`;
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        class="pointer-events-none absolute top-0"
+        style={{
+          left: `${trunkX(props.depth) - w() / 2}px`,
+          width: `${ELBOW_R + ELBOW_TAIL}px`,
+          // Bottom border centred on the row's midline.
+          height: `calc(50% + ${w() / 2}px)`,
+          'border-left': `${w()}px solid ${color()}`,
+          'border-bottom': `${w()}px solid ${color()}`,
+          'border-bottom-left-radius': `${ELBOW_R}px`,
+        }}
+      />
+      <Show when={!props.branch.last}>
+        <Trunk branch={props.branch} depth={props.depth} top={`calc(50% + ${w() / 2 - ELBOW_R}px)`} />
+      </Show>
+    </>
+  );
+};
+
+/** The stub under an expanded parent's chevron that starts its line set. The
+ *  down-pointing chevron's tip sits ~2px below the midline; leave a gap. */
+const TrunkStub: Component<{ hue: number; depth: number }> = props => {
+  const w = () => lineWidth(props.depth);
+  return (
+    <div
+      aria-hidden="true"
+      class="pointer-events-none absolute bottom-0"
+      style={{
+        top: 'calc(50% + 5px)',
+        left: `${trunkX(props.depth + 1) - w() / 2}px`,
+        width: `${w()}px`,
+        background: `var(--tree-line-${props.hue})`,
+      }}
+    />
+  );
+};
+
+const TopologyNode: Component<{ node: TopoNode; depth: number; branch?: Branch; hue: number }> = props => {
   const device = () => props.node.device;
   const hasChildren = () => props.node.children.length > 0;
   // Default depth comes from startCollapsed (expanded down to the physical-plug
@@ -98,6 +205,13 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
         onMouseEnter={() => setHoveredId(device().instanceId)}
         onMouseLeave={() => setHoveredId(null)}
       >
+        {/* Tree lines: the curve in from the parent's trunk, and the start of
+            this node's own trunk when its children are showing. */}
+        <Show when={props.branch}>{b => <RowLines branch={b()} depth={props.depth} />}</Show>
+        <Show when={hasChildren() && !collapsed()}>
+          <TrunkStub hue={props.hue} depth={props.depth} />
+        </Show>
+
         {/* Expand/collapse chevron, or a spacer so leaf rows align. */}
         <Show when={hasChildren()} fallback={<div class="w-4 shrink-0" aria-hidden="true" />}>
           <div
@@ -200,12 +314,19 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
         </div>
       </div>
 
-      {/* Children — identical siblings collapse into group rows */}
+      {/* Children — identical siblings collapse into group rows. The parent's
+          trunk keeps running down the side of this subtree to the next sibling. */}
       <Show when={hasChildren() && !collapsed()}>
-        <TopoRows
-          rows={groupTopoSiblings(props.node.children, device().instanceId, groupingOn())}
-          depth={props.depth + 1}
-        />
+        <div class="relative">
+          <Show when={props.branch && !props.branch.last ? props.branch : undefined}>
+            {b => <Trunk branch={b()} depth={props.depth} />}
+          </Show>
+          <TopoRows
+            rows={groupTopoSiblings(props.node.children, device().instanceId, groupingOn())}
+            depth={props.depth + 1}
+            parentHue={props.hue}
+          />
+        </div>
       </Show>
     </div>
   );
@@ -216,7 +337,12 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
  * as a full TopologyNode (with its own subtree). Forced open while any member's
  * subtree has a problem, so a group never hides something that needs attention.
  */
-const TopoGroup: Component<{ group: Extract<TopoRow, { kind: 'group' }>; depth: number }> = props => {
+const TopoGroup: Component<{
+  group: Extract<TopoRow, { kind: 'group' }>;
+  depth: number;
+  branch?: Branch;
+  hue: number;
+}> = props => {
   const rep = () => props.group.nodes[0].device;
   const problemCount = () => props.group.nodes.filter(subtreeHasProblem).length;
   const expanded = () => problemCount() > 0 || isGroupExpanded(props.group.key);
@@ -224,10 +350,17 @@ const TopoGroup: Component<{ group: Extract<TopoRow, { kind: 'group' }>; depth: 
   return (
     <div>
       <div
-        class="group flex items-center gap-2 pr-2 py-1 border-l-4 border-l-transparent rounded-r-lg cursor-pointer transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+        class="group relative flex items-center gap-2 pr-2 py-1 border-l-4 border-l-transparent rounded-r-lg cursor-pointer transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800/50"
         style={{ 'padding-left': `${props.depth * 16 + 8}px` }}
         onClick={() => toggleGroup(props.group.key)}
       >
+        {/* Tree lines — a group row hangs off its parent like any sibling, and
+            its members hang off it. */}
+        <Show when={props.branch}>{b => <RowLines branch={b()} depth={props.depth} />}</Show>
+        <Show when={expanded()}>
+          <TrunkStub hue={props.hue} depth={props.depth} />
+        </Show>
+
         {/* Expand/collapse chevron */}
         <div class="w-4 h-4 shrink-0 flex items-center justify-center text-gray-400 dark:text-gray-500">
           <svg
@@ -264,25 +397,56 @@ const TopoGroup: Component<{ group: Extract<TopoRow, { kind: 'group' }>; depth: 
 
       {/* Members, each with its own subtree */}
       <Show when={expanded()}>
-        <For each={props.group.nodes}>{node => <TopologyNode node={node} depth={props.depth + 1} />}</For>
+        <div class="relative">
+          <Show when={props.branch && !props.branch.last ? props.branch : undefined}>
+            {b => <Trunk branch={b()} depth={props.depth} />}
+          </Show>
+          <For each={props.group.nodes}>
+            {(node, i) => (
+              <TopologyNode
+                node={node}
+                depth={props.depth + 1}
+                branch={{ hue: props.hue, last: i() === props.group.nodes.length - 1 }}
+                hue={ownHue(i(), props.hue)}
+              />
+            )}
+          </For>
+        </div>
       </Show>
     </div>
   );
 };
 
-/** One sibling level: individual nodes interleaved with identical-run groups. */
-const TopoRows: Component<{ rows: TopoRow[]; depth: number }> = props => (
-  <For each={props.rows}>
-    {row => (
-      <Switch>
-        <Match when={row.kind === 'node' ? row : null}>
-          {r => <TopologyNode node={r().node} depth={props.depth} />}
-        </Match>
-        <Match when={row.kind === 'group' ? row : null}>{r => <TopoGroup group={r()} depth={props.depth} />}</Match>
-      </Switch>
-    )}
-  </For>
-);
+/** One sibling level: individual nodes interleaved with identical-run groups.
+ *  `parentHue` is the colour of the trunk these rows hang from; absent at the
+ *  root, where there is no trunk. */
+const TopoRows: Component<{ rows: TopoRow[]; depth: number; parentHue?: number }> = props => {
+  const branchFor = (i: number): Branch | undefined =>
+    props.parentHue === undefined ? undefined : { hue: props.parentHue, last: i === props.rows.length - 1 };
+  return (
+    <For each={props.rows}>
+      {(row, i) => (
+        <Switch>
+          <Match when={row.kind === 'node' ? row : null}>
+            {r => (
+              <TopologyNode
+                node={r().node}
+                depth={props.depth}
+                branch={branchFor(i())}
+                hue={ownHue(i(), props.parentHue)}
+              />
+            )}
+          </Match>
+          <Match when={row.kind === 'group' ? row : null}>
+            {r => (
+              <TopoGroup group={r()} depth={props.depth} branch={branchFor(i())} hue={ownHue(i(), props.parentHue)} />
+            )}
+          </Match>
+        </Switch>
+      )}
+    </For>
+  );
+};
 
 const TopologyView: Component = () => {
   return (

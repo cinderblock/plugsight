@@ -7,7 +7,15 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { DeviceInfo } from './types';
-import { buildFilteredTopologyForest, buildTopologyForest, elideHidden, type TopoNode } from './topology';
+import {
+  attachTwins,
+  buildFilteredTopologyForest,
+  buildTopologyForest,
+  elideHidden,
+  mergeUsbHubTwins,
+  subtreeHasProblem,
+  type TopoNode,
+} from './topology';
 
 /** A minimal device; only the fields the topology reads actually matter. */
 function device(instanceId: string, name: string, parentId = ''): DeviceInfo {
@@ -251,3 +259,100 @@ describe('elideHidden', () => {
 function argsOf(f: ReturnType<typeof fixture>) {
   return [f.devicesById, f.childrenByParent, f.parentByChild] as const;
 }
+
+/** A USB 2 hub half that the backend paired with `usb3Id` through its companion port. */
+function usb2Half(instanceId: string, parentId: string, usb3Id: string): DeviceInfo {
+  return {
+    ...device(instanceId, 'Generic USB Hub', parentId),
+    links: [
+      { bus: 'usb', speed: 'high', capable: 'super', portUsb3: true, companionConnected: true, companionId: usb3Id },
+    ],
+  };
+}
+
+/**
+ * Two USB 3 hubs, one plugged into the other, as Windows lists them — each
+ * hub twice, one half per USB generation:
+ *
+ *   root hub ┬ hub A (USB 2 half) ┬ keyboard
+ *            │                    └ hub B (USB 2 half) → mouse
+ *            └ hub A (USB 3 half) ┬ SSD
+ *                                 └ hub B (USB 3 half) → capture card
+ */
+const TWIN_DEVICES = [
+  device('USB\\ROOT', 'USB Root Hub (USB 3.0)'),
+  usb2Half('USB\\A2', 'USB\\ROOT', 'USB\\A3'),
+  device('USB\\A3', 'Generic SuperSpeed USB Hub', 'USB\\ROOT'),
+  device('USB\\KEYBOARD', 'Keyboard', 'USB\\A2'),
+  device('USB\\SSD', 'Portable SSD', 'USB\\A3'),
+  // Reported in a different case than the real ID: pairing is case-insensitive.
+  usb2Half('USB\\B2', 'USB\\A2', 'usb\\b3'),
+  device('USB\\B3', 'Generic SuperSpeed USB Hub', 'USB\\A3'),
+  device('USB\\MOUSE', 'Mouse', 'USB\\B2'),
+  device('USB\\CAPTURE', 'Capture Card', 'USB\\B3'),
+];
+
+describe('mergeUsbHubTwins', () => {
+  const merged = () => {
+    const f = fixture(TWIN_DEVICES);
+    return mergeUsbHubTwins(f.devicesById, f.childrenByParent, f.parentByChild);
+  };
+
+  test('folds each USB 3 hub into one row, keeping the USB 3 half', () => {
+    const m = merged();
+    expect(m.devicesById.has('USB\\A2')).toBe(false);
+    expect(m.devicesById.has('USB\\B2')).toBe(false);
+    expect(m.twins.get('USB\\A3')?.instanceId).toBe('USB\\A2');
+    expect(m.twins.get('USB\\B3')?.instanceId).toBe('USB\\B2');
+  });
+
+  test('each device ends up under the hub it is physically plugged into', () => {
+    const m = merged();
+    const forest = attachTwins(buildTopologyForest(m.devicesById, m.childrenByParent, m.parentByChild), m.twins);
+    const nodes = flatten(forest);
+
+    const hubA = nodes.get('USB\\A3')!;
+    expect(hubA.twin?.instanceId).toBe('USB\\A2');
+    expect(hubA.children.map(c => c.device.instanceId).sort()).toEqual(['USB\\B3', 'USB\\KEYBOARD', 'USB\\SSD']);
+
+    const hubB = nodes.get('USB\\B3')!;
+    expect(hubB.twin?.instanceId).toBe('USB\\B2');
+    expect(hubB.children.map(c => c.device.instanceId).sort()).toEqual(['USB\\CAPTURE', 'USB\\MOUSE']);
+
+    // One chain under the root hub, not two.
+    expect(nodes.get('USB\\ROOT')!.children.map(c => c.device.instanceId)).toEqual(['USB\\A3']);
+  });
+
+  test('a USB 2 half whose twin is missing stays its own row', () => {
+    // Hub A's USB 3 side is down (or hidden): nothing to fold into.
+    const f = fixture(TWIN_DEVICES.filter(d => d.instanceId !== 'USB\\A3'));
+    const m = mergeUsbHubTwins(f.devicesById, f.childrenByParent, f.parentByChild);
+    expect(m.devicesById.has('USB\\A2')).toBe(true);
+    expect(m.twins.has('USB\\A3')).toBe(false);
+    expect(m.parentByChild.get('USB\\KEYBOARD')).toBe('USB\\A2');
+  });
+
+  test('returns the inputs untouched when nothing pairs', () => {
+    const f = fixture();
+    const m = mergeUsbHubTwins(f.devicesById, f.childrenByParent, f.parentByChild);
+    expect(m.devicesById).toBe(f.devicesById);
+    expect(m.twins.size).toBe(0);
+  });
+
+  test('a problem on the folded USB 2 half still flags the row', () => {
+    const broken = TWIN_DEVICES.map(d =>
+      d.instanceId === 'USB\\B2' ? { ...d, status: { kind: 'error' as const, code: 43, message: 'Failed' } } : d,
+    );
+    const f = fixture(broken);
+    const m = mergeUsbHubTwins(f.devicesById, f.childrenByParent, f.parentByChild);
+    const forest = attachTwins(buildTopologyForest(m.devicesById, m.childrenByParent, m.parentByChild), m.twins);
+    expect(subtreeHasProblem(flatten(forest).get('USB\\B3')!)).toBe(true);
+  });
+
+  test('two halves claiming the same twin fold only once', () => {
+    const f = fixture([...TWIN_DEVICES, usb2Half('USB\\ROGUE', 'USB\\ROOT', 'USB\\A3')]);
+    const m = mergeUsbHubTwins(f.devicesById, f.childrenByParent, f.parentByChild);
+    expect(m.twins.get('USB\\A3')?.instanceId).toBe('USB\\A2');
+    expect(m.devicesById.has('USB\\ROGUE')).toBe(true);
+  });
+});

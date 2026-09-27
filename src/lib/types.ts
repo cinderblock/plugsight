@@ -46,6 +46,11 @@ export type LinkInfo =
        * this is the USB 2 half of a USB 3 hub whose USB 3 half is its own row.
        */
       companionConnected: boolean;
+      /**
+       * Instance ID of this USB 2 hub half's USB 3 twin, when the backend could
+       * name it. The Connections tree folds the pair into one row.
+       */
+      companionId: string | null;
     }
   | {
       bus: 'pcie';
@@ -138,6 +143,21 @@ export function hasDeviceProblem(status: DeviceStatus): boolean {
     status.kind === 'disabled' ||
     status.kind === 'driverNotInstalled'
   );
+}
+
+/** How urgent a status is, for picking the one to show when a row stands for two devices. */
+const STATUS_SEVERITY: Record<DeviceStatus['kind'], number> = {
+  ok: 0,
+  unknown: 1,
+  disabled: 2,
+  driverNotInstalled: 3,
+  warning: 4,
+  error: 5,
+};
+
+/** The more urgent of two statuses; `a` when there's no `b` or they tie. */
+export function worseStatus(a: DeviceStatus, b?: DeviceStatus): DeviceStatus {
+  return b && STATUS_SEVERITY[b.kind] > STATUS_SEVERITY[a.kind] ? b : a;
 }
 
 /** Returns a human-readable label for a status. */

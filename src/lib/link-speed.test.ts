@@ -12,6 +12,7 @@ const usb = (speed: UsbSpeed, capable: UsbSpeed = speed, portUsb3 = true, compan
   capable,
   portUsb3,
   companionConnected,
+  companionId: null,
 });
 
 const pcie = (generation: number, width: number, maxGeneration = generation, maxWidth = width): LinkInfo => ({
@@ -67,7 +68,7 @@ describe('describeLink (USB)', () => {
     const s = describeLink(usb('high', 'super', true, true));
     expect(s.degraded).toBe(false);
     expect(s.speed).toBe('480 Mbps');
-    expect(s.note).toMatch(/USB 3 side is its own row/);
+    expect(s.note).toMatch(/Windows lists such hubs twice/);
   });
 
   test('a USB 3 hub whose companion port is empty really did fall back', () => {

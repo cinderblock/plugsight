@@ -16,7 +16,7 @@ import type { Component } from 'solid-js';
 import { For, Show, Switch, Match } from 'solid-js';
 import type { TopoNode, TopoRow } from '~/lib/topology';
 import { groupTopoSiblings, subtreeHasProblem } from '~/lib/topology';
-import { hasDeviceProblem } from '~/lib/types';
+import { hasDeviceProblem, worseStatus } from '~/lib/types';
 import {
   state,
   topologyForest,
@@ -49,13 +49,23 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
   // level); a user toggle flips it. Forced open while filtering so the matching
   // devices show — the forest is already pruned to matches plus their ancestors.
   const collapsed = () => !isFiltering() && props.node.startCollapsed !== isTopoToggled(device().instanceId);
-  const isSelected = () => selectedId() === device().instanceId;
-  const isRecentChange = () => recentChanges().has(device().instanceId);
-  const hasProblem = () => hasDeviceProblem(device().status);
+  /** The USB 2 half folded into this row, when it's a USB 3 hub Windows lists twice. */
+  const twin = () => props.node.twin;
+  /** The row stands for both halves, so it shows whichever status is worse. */
+  const status = () => worseStatus(device().status, twin()?.status);
+  const isSelected = () => {
+    const id = selectedId();
+    return id !== null && (id === device().instanceId || id === twin()?.instanceId);
+  };
+  const isRecentChange = () =>
+    recentChanges().has(device().instanceId) || (twin() !== undefined && recentChanges().has(twin()!.instanceId));
+  const hasProblem = () => hasDeviceProblem(status());
+  /** Both halves' link chips: the USB 3 side first, then the USB 2 side. */
+  const links = () => [...device().links, ...(twin()?.links ?? [])];
 
   /** Colored left accent only when there's a problem; transparent otherwise. */
   const borderClass = () => {
-    switch (device().status.kind) {
+    switch (status().kind) {
       case 'error':
         return 'border-l-red-500';
       case 'warning':
@@ -72,7 +82,7 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
   return (
     <div>
       <div
-        class={`group flex items-center gap-2 pr-2 py-1 border-l-4 rounded-r-lg cursor-pointer transition-all duration-200
+        class={`group relative flex items-center gap-2 pr-2 py-1 border-l-4 rounded-r-lg cursor-pointer transition-all duration-200
         ${borderClass()}
         ${
           isSelected()
@@ -120,9 +130,14 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
         </div>
 
         {/* Name */}
-        <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{device().name}</span>
+        {/* The name gives up width before the chips do, but never below a few
+            characters: a deep row with the detail pane open has little room,
+            and a row with chips but no name says nothing. */}
+        <span class="min-w-[5rem] shrink-[4] text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+          {device().name}
+        </span>
 
-        <StatusBadge status={device().status} compact />
+        <StatusBadge status={status()} compact />
 
         {/* Child count */}
         <Show when={hasChildren()}>
@@ -132,14 +147,19 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
         </Show>
 
         {/* Upstream link speed — this is the view where a slow link's place in
-            the chain is visible, so the chip sits right on the row. */}
-        <LinkBadge links={device().links} />
+            the chain is visible, so the chip sits right on the row. A folded
+            USB 3 hub shows both sides: "5 Gbps" and "480 Mbps". */}
+        <span class="flex min-w-0 items-center gap-1 overflow-hidden">
+          <LinkBadge links={links()} />
+        </span>
 
         {/* Action buttons (visible on hover) — div, not button, so they don't
             nest inside the clickable row. Hiding is not the same as collapsing:
             the chevron folds this node's children away, hide drops the row from
             both views and persists. */}
-        <div class="ml-auto shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Floats over the row's right edge on hover instead of reserving its
+            width while invisible, which starved deep rows of room for the name. */}
+        <div class="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-md bg-gray-100/95 shadow-sm opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 dark:bg-gray-800/95">
           {/* Properties — also on double-click, but nothing advertises that */}
           <div
             role="button"
@@ -157,7 +177,9 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
             </svg>
           </div>
 
-          {/* Hide — the tree closes up around it; children reparent upward */}
+          {/* Hide — the tree closes up around it; children reparent upward.
+              A folded hub row hides both halves, or the other would pop back
+              up as a row of its own. */}
           <div
             role="button"
             class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
@@ -165,6 +187,8 @@ const TopologyNode: Component<{ node: TopoNode; depth: number }> = props => {
             onClick={e => {
               e.stopPropagation();
               hideDevice(device().instanceId);
+              const other = twin();
+              if (other) hideDevice(other.instanceId);
             }}
           >
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

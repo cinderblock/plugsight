@@ -7,7 +7,7 @@
 
 import type { Component } from 'solid-js';
 import { Show, For } from 'solid-js';
-import { selectedDevice, setSelectedId } from '~/lib/device-store';
+import { selectedDevice, setSelectedId, usbHubHalves } from '~/lib/device-store';
 import { openDeviceProperties } from '~/lib/tauri';
 import { statusLabel, hasDeviceProblem } from '~/lib/types';
 import { describeLink } from '~/lib/link-speed';
@@ -141,6 +141,33 @@ const DeviceDetail: Component = () => {
                 );
               }}
             </For>
+
+            {/* The other half of a USB 3 hub. Windows lists the hub twice, once
+                per USB generation; the Connections tree folds the pair into one
+                row, so say which half this is and name the other. */}
+            <Show when={usbHubHalves().get(device().instanceId)}>
+              {half => {
+                const otherLink = () => half().other.links.find(l => l.bus === 'usb');
+                return (
+                  <div class="mb-6">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                      {half().otherIs === 'usb2' ? 'USB 2 side of this hub' : 'USB 3 side of this hub'}
+                    </h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-300 mb-3">
+                      Windows lists a USB 3 hub twice, once per USB generation. The Connections tree shows both as one
+                      row.
+                    </p>
+                    <div class="space-y-3">
+                      <DetailRow label="Listed as" value={half().other.name} />
+                      <Show when={otherLink()}>
+                        {link => <DetailRow label="Running at" value={describeLink(link()).speedDetail} />}
+                      </Show>
+                      <DetailRow label="Instance ID" value={half().other.instanceId} mono />
+                    </div>
+                  </div>
+                );
+              }}
+            </Show>
 
             {/* Properties grid */}
             <div class="space-y-3">

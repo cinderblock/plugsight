@@ -100,7 +100,8 @@ export function describeLink(link: LinkInfo): LinkSummary {
       const degraded = slower && !link.companionConnected;
       let note: string | null = null;
       if (slower && link.companionConnected) {
-        note = 'USB 2 side of a USB 3 hub. Windows lists such hubs twice; the USB 3 side is its own row.';
+        note =
+          'USB 2 side of a USB 3 hub. Windows lists such hubs twice, once per USB generation; the Connections tree shows the pair as one row.';
       } else if (degraded && !link.portUsb3) {
         note = 'This device supports USB 3, but the port it is plugged into only carries USB 2.';
       } else if (degraded) {

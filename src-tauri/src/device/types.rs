@@ -73,6 +73,10 @@ pub enum LinkInfo {
         /// USB 2 half of a hub whose USB 3 half is its own row, not a hub that
         /// fell back to USB 2.
         companion_connected: bool,
+        /// Instance ID of what's on the companion port when it's a hub: this
+        /// USB 2 hub half's USB 3 twin. The Connections tree folds the two
+        /// into one row. `None` when there's no twin or it couldn't be named.
+        companion_id: Option<String>,
     },
     /// A PCI Express endpoint's link to its upstream port.
     #[serde(rename_all = "camelCase")]

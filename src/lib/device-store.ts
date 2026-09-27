@@ -16,7 +16,15 @@ import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice
 import { hasDeviceProblem } from './types';
 import { onDeviceEvent, getAllDevices } from './tauri';
 import { loadClassIcons } from './icon-cache';
-import { buildTopologyForest, buildFilteredTopologyForest, elideHidden, type TopoNode } from './topology';
+import {
+  attachTwins,
+  buildTopologyForest,
+  buildFilteredTopologyForest,
+  elideHidden,
+  mergeUsbHubTwins,
+  pairUsbHubTwins,
+  type TopoNode,
+} from './topology';
 import { notifyDeviceChange, NOTIFY_MODE_ORDER, type NotifyMode, type NotifyDelivery } from './notifications';
 
 /**
@@ -614,20 +622,53 @@ const topologyForest = createMemo<TopoNode[]>(() => {
     d => hiddenClasses.has(d.classGuid) || hiddenDevices.has(d.instanceId),
   );
 
+  // Windows lists every USB 3 hub twice, once per USB generation. Fold each
+  // pair into one row so the tree matches the hubs on the desk. After eliding
+  // hidden devices, so hiding either half leaves the other as a plain row.
+  const merged = mergeUsbHubTwins(rel.devicesById, rel.childrenByParent, rel.parentByChild);
+
   if (query === '' && !problemsOnly) {
-    return buildTopologyForest(rel.devicesById, rel.childrenByParent, rel.parentByChild);
+    return attachTwins(
+      buildTopologyForest(merged.devicesById, merged.childrenByParent, merged.parentByChild),
+      merged.twins,
+    );
   }
 
   // Same predicate the category view applies to each device, so both views agree
   // on what a filter means; the topology then re-adds the ancestor chain each
-  // match needs to be placed at all.
-  return buildFilteredTopologyForest(
-    rel.devicesById,
-    rel.childrenByParent,
-    rel.parentByChild,
-    d => (!query || matchesSearch(d, query)) && (!problemsOnly || hasDeviceProblem(d.status)),
-    problemsOnly,
+  // match needs to be placed at all. A folded hub row matches if either half does.
+  const matches = (d: DeviceInfo) =>
+    (!query || matchesSearch(d, query)) && (!problemsOnly || hasDeviceProblem(d.status));
+  return attachTwins(
+    buildFilteredTopologyForest(
+      merged.devicesById,
+      merged.childrenByParent,
+      merged.parentByChild,
+      d => {
+        const twin = merged.twins.get(d.instanceId);
+        return matches(d) || (twin !== undefined && matches(twin));
+      },
+      problemsOnly,
+    ),
+    merged.twins,
   );
+});
+
+/**
+ * For each half of a USB 3 hub that Windows lists twice, the other half and
+ * which generation it carries. Keyed by either half's instanceId, over live
+ * devices, regardless of hiding — the detail pane uses it to describe the
+ * half you're not looking at.
+ */
+const usbHubHalves = createMemo<Map<string, { other: DeviceInfo; otherIs: 'usb2' | 'usb3' }>>(() => {
+  const devicesById = new Map<string, DeviceInfo>();
+  for (const d of Object.values(state.devices)) devicesById.set(d.instanceId, d);
+  const halves = new Map<string, { other: DeviceInfo; otherIs: 'usb2' | 'usb3' }>();
+  for (const [usb2, usb3] of pairUsbHubTwins(devicesById)) {
+    halves.set(usb3, { other: devicesById.get(usb2)!, otherIs: 'usb2' });
+    halves.set(usb2, { other: devicesById.get(usb3)!, otherIs: 'usb3' });
+  }
+  return halves;
 });
 
 function matchesSearch(device: DeviceInfo, query: string): boolean {
@@ -943,6 +984,7 @@ export {
   hoveredId,
   setHoveredId,
   relationIndex,
+  usbHubHalves,
   // Actions
   toggleCategory,
   expandAllCategories,

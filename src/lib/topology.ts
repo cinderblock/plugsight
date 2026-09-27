@@ -27,6 +27,12 @@ export interface TopoNode {
    * detail the user asks for by expanding.
    */
   startCollapsed: boolean;
+  /**
+   * The USB 2 half of a USB 3 hub, folded into this row (which is the USB 3
+   * half). Windows lists every USB 3 hub twice, once per USB generation; see
+   * {@link mergeUsbHubTwins}.
+   */
+  twin?: DeviceInfo;
 }
 
 /** Instance-ID prefixes considered in-scope for the USB + PCI topology. */
@@ -61,9 +67,13 @@ function hasUsbPlugDescendant(children: TopoNode[]): boolean {
   return children.some(c => isUsbPlug(c.device.instanceId) || hasUsbPlugDescendant(c.children));
 }
 
-/** Whether the node or anything in its subtree has a problem. */
+/** Whether the node (either half, for a folded USB 3 hub) or anything in its subtree has a problem. */
 export function subtreeHasProblem(node: TopoNode): boolean {
-  return hasDeviceProblem(node.device.status) || node.children.some(subtreeHasProblem);
+  return (
+    hasDeviceProblem(node.device.status) ||
+    (node.twin !== undefined && hasDeviceProblem(node.twin.status)) ||
+    node.children.some(subtreeHasProblem)
+  );
 }
 
 /**
@@ -258,6 +268,111 @@ export function elideHidden(
   }
 
   return { devicesById: nextDevices, childrenByParent: nextChildren, parentByChild: nextParent };
+}
+
+/**
+ * The instance ID of a USB 2 hub half's USB 3 twin, when the backend named
+ * one (from the hub's SuperSpeed companion port).
+ */
+export function usbTwinId(device: DeviceInfo): string | null {
+  for (const link of device.links) {
+    if (link.bus === 'usb' && link.companionId) return link.companionId;
+  }
+  return null;
+}
+
+/**
+ * Pair each USB 2 hub half with its USB 3 twin, over a set of devices.
+ * Returns `usb2 id → usb3 id`, resolved case-insensitively against the set.
+ * A device pairs at most once in either role, so a malformed report can't
+ * chain three rows together.
+ */
+export function pairUsbHubTwins(devicesById: Map<string, DeviceInfo>): Map<string, string> {
+  const byUpper = new Map<string, string>();
+  for (const id of devicesById.keys()) byUpper.set(id.toUpperCase(), id);
+
+  const usb3Of = new Map<string, string>();
+  const claimed = new Set<string>();
+  for (const device of devicesById.values()) {
+    const reported = usbTwinId(device);
+    if (!reported) continue;
+    const usb3 = byUpper.get(reported.toUpperCase());
+    const usb2 = device.instanceId;
+    if (!usb3 || usb3 === usb2 || claimed.has(usb3) || claimed.has(usb2)) continue;
+    usb3Of.set(usb2, usb3);
+    claimed.add(usb2).add(usb3);
+  }
+  return usb3Of;
+}
+
+/**
+ * Fold the two halves of each USB 3 hub into one node.
+ *
+ * Windows enumerates a USB 3 hub as two logical hubs on paired ports: a USB 2
+ * half that carries the hub's USB 2 devices, and a USB 3 half that carries the
+ * SuperSpeed ones. A chain of hubs therefore shows up as two parallel chains.
+ * This keeps the USB 3 half as the row, drops the USB 2 half from the set, and
+ * re-parents its children onto the USB 3 half — so the tree matches the hubs
+ * on the desk, with each device under the hub it's actually plugged into.
+ *
+ * Only positively identified pairs fold (the backend names the twin from the
+ * hub's companion port). A half whose twin is missing — its USB 3 side is
+ * down, say — stays its own row: that's the situation the amber link chips
+ * exist to point at.
+ *
+ * Returns the inputs unchanged (plus an empty `twins`) when nothing pairs.
+ */
+export function mergeUsbHubTwins(
+  devicesById: Map<string, DeviceInfo>,
+  childrenByParent: Map<string, Set<string>>,
+  parentByChild: Map<string, string>,
+): {
+  devicesById: Map<string, DeviceInfo>;
+  childrenByParent: Map<string, Set<string>>;
+  parentByChild: Map<string, string>;
+  /** USB 3 half's instanceId → the USB 2 half folded into its row. */
+  twins: Map<string, DeviceInfo>;
+} {
+  const usb3Of = pairUsbHubTwins(devicesById);
+  const twins = new Map<string, DeviceInfo>();
+  if (usb3Of.size === 0) return { devicesById, childrenByParent, parentByChild, twins };
+
+  for (const [usb2, usb3] of usb3Of) twins.set(usb3, devicesById.get(usb2)!);
+
+  const nextDevices = new Map<string, DeviceInfo>();
+  for (const [id, device] of devicesById) {
+    if (!usb3Of.has(id)) nextDevices.set(id, device);
+  }
+
+  const alias = (id: string) => usb3Of.get(id) ?? id;
+  const nextParent = new Map<string, string>();
+  const nextChildren = new Map<string, Set<string>>();
+  for (const id of nextDevices.keys()) {
+    const parent = parentByChild.get(id);
+    if (!parent) continue;
+    const merged = alias(parent);
+    if (merged === id) continue; // never make a row its own parent
+    nextParent.set(id, merged);
+    let kids = nextChildren.get(merged);
+    if (!kids) nextChildren.set(merged, (kids = new Set()));
+    kids.add(id);
+  }
+
+  return { devicesById: nextDevices, childrenByParent: nextChildren, parentByChild: nextParent, twins };
+}
+
+/** Set `twin` on every node of a freshly built forest whose device has one. */
+export function attachTwins(forest: TopoNode[], twins: Map<string, DeviceInfo>): TopoNode[] {
+  if (twins.size === 0) return forest;
+  const walk = (nodes: TopoNode[]) => {
+    for (const node of nodes) {
+      const twin = twins.get(node.device.instanceId);
+      if (twin) node.twin = twin;
+      walk(node.children);
+    }
+  };
+  walk(forest);
+  return forest;
 }
 
 /** Eldest (largest subtree) first, then alphabetical by name. */

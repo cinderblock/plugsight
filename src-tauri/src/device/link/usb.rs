@@ -34,8 +34,9 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 
 use windows::Win32::Devices::DeviceAndDriverInstallation::{
-    CM_Get_DevNode_PropertyW, CM_Get_Device_ID_Size, CM_Get_Device_IDW, CM_Get_Parent,
-    CM_LOCATE_DEVNODE_NORMAL, CM_Locate_DevNodeW, CR_SUCCESS, HDEVINFO, SP_DEVINFO_DATA,
+    CM_Get_DevNode_PropertyW, CM_Get_Device_ID_Size, CM_Get_Device_IDW,
+    CM_Get_Device_Interface_PropertyW, CM_Get_Parent, CM_LOCATE_DEVNODE_NORMAL, CM_Locate_DevNodeW,
+    CR_SUCCESS, HDEVINFO, SP_DEVINFO_DATA,
 };
 use windows::Win32::Devices::Properties::{DEVPROPKEY, DEVPROPTYPE};
 use windows::Win32::Devices::Usb::{
@@ -129,6 +130,7 @@ impl HubProbe {
             capable,
             port_usb3,
             companion_connected,
+            companion_id,
         } = &mut link
         {
             if companion.is_some() {
@@ -148,6 +150,12 @@ impl HubProbe {
                 {
                     *companion_connected = true;
                     *port_usb3 = true;
+                    // What sits on the companion port is this hub's USB 3 half;
+                    // name it so the Connections tree can fold the pair into
+                    // one row. Only hubs have a node name, which is exactly the
+                    // case that has two halves.
+                    *companion_id = hub_name_at_port(twin_hub, twin_port)
+                        .and_then(|name| instance_id_of_interface(&name));
                 }
                 log::debug!("USB link {parent_id} port {port}: {link:?}");
             }
@@ -364,8 +372,47 @@ fn port_link(hub: HANDLE, port: u32) -> Option<(LinkInfo, Option<(String, u32)>)
         capable: capable.max(speed),
         port_usb3,
         companion_connected: false,
+        companion_id: None,
     };
     Some((link, companion_port(hub, port)))
+}
+
+/// The PnP instance ID behind a device interface symbolic link name, as the
+/// hub IOCTLs report it (`USB#VID_...#{guid}`, no `\\?\` prefix). Asked of
+/// Windows rather than derived by rewriting `#` to `\`: nothing guarantees an
+/// instance ID is free of `#`.
+fn instance_id_of_interface(link_name: &str) -> Option<String> {
+    const DEVPKEY_DEVICE_INSTANCE_ID: DEVPROPKEY = DEVPROPKEY {
+        fmtid: GUID::from_u128(0x78c34fc8_104a_4aca_9ea4_524d52996e57),
+        pid: 256,
+    };
+    const DEVPROP_TYPE_STRING: u32 = 0x0000_0012;
+
+    let path: Vec<u16> = "\\\\?\\"
+        .encode_utf16()
+        .chain(link_name.encode_utf16())
+        .chain(std::iter::once(0))
+        .collect();
+    // Instance IDs are capped at 200 characters (MAX_DEVICE_ID_LEN).
+    let mut buffer = [0u16; 256];
+    let mut size = std::mem::size_of_val(&buffer) as u32;
+    let mut prop_type = DEVPROPTYPE(0);
+    let cr = unsafe {
+        CM_Get_Device_Interface_PropertyW(
+            PCWSTR(path.as_ptr()),
+            &DEVPKEY_DEVICE_INSTANCE_ID,
+            &mut prop_type,
+            Some(buffer.as_mut_ptr() as *mut u8),
+            &mut size,
+            0,
+        )
+    };
+    if cr != CR_SUCCESS || prop_type.0 != DEVPROP_TYPE_STRING {
+        log::debug!("No instance ID for USB hub interface {link_name}: {cr:?}");
+        return None;
+    }
+    let end = buffer.iter().position(|&c| c == 0).unwrap_or(buffer.len());
+    (end > 0).then(|| String::from_utf16_lossy(&buffer[..end]))
 }
 
 /// The SuperSpeed companion of a port, as the hub driver reports it: the

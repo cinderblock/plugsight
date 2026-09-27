@@ -144,12 +144,17 @@ USB + PCIe link speeds were meant to ship as v0.4.0. It took three tags:
   `latest.json`. Checked the manifest: version 0.4.2, signature trusted
   comment `file:PlugSight_0.4.2_x64-setup.exe` / `version:0.4.2`, installer
   URL returns 200.
-- Ethernet + SATA (`0604aea`) and the CI test steps (`0eb075d`) are
-  committed locally and **not yet pushed or released**.
+- **v0.5.0** (`731b551`, 2026-09-26): Ethernet + SATA link speeds
+  (`0604aea`), CI typecheck/test steps (`0eb075d`), and a leftover Prettier
+  commit (`dc5aead`). `main` was pushed first and CI waited on (green, with
+  the new test steps) before the tag went out. Published (run 36282171410);
+  manifest checked: version 0.5.0, trusted comment
+  `file:PlugSight_0.5.0_x64-setup.exe` / `version:0.5.0`, installer URL 200.
 
 CI also went red once in between: Rust 1.98 on the runner added
 `chunks_exact_to_as_chunks`, which the local 1.97 toolchain doesn't know
-(`cea3283`). Local clippy passing does not guarantee CI clippy passing.
+(`cea3283`). Local clippy passing does not guarantee CI clippy passing, which
+is why the v0.5.0 release waited for CI on `main` before tagging.
 
 ## Open questions for the user
 

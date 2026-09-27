@@ -191,9 +191,7 @@ async function tryNativeUpdater(): Promise<boolean> {
       setUpdateAvailable(true);
       setCanAutoUpdate(true);
       // Try to get the release URL for display purposes.
-      setReleaseUrl(
-        `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tag/v${update.version}`,
-      );
+      setReleaseUrl(`https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tag/v${update.version}`);
       return true;
     }
     // Plugin worked but no update available.

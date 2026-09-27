@@ -19,7 +19,7 @@ interface DeviceIconProps {
 
 const DeviceIcon: Component<DeviceIconProps> = props => {
   const iconClass = () => props.class ?? 'w-5 h-5';
-  const realIconUrl = () => props.classGuid ? getClassIconUrl(props.classGuid) : undefined;
+  const realIconUrl = () => (props.classGuid ? getClassIconUrl(props.classGuid) : undefined);
 
   return (
     <Show

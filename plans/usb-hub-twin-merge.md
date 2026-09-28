@@ -91,8 +91,12 @@ and said "keep going" after v0.5.0; the recommendation in
 - [x] Backend `companion_id` (clippy clean); `pairUsbHubTwins`,
       `mergeUsbHubTwins`, `attachTwins`, `worseStatus`; 6 new tests (52 total
       pass); store, Connections row, detail pane; README.
-- [x] Live verification + row layout fix; committed (not pushed, not
-      released).
+- [x] Live verification + row layout fix; committed as `1ce35d9`.
+- [x] Released in **v0.6.0** (`a2bf6c4`, 2026-09-28), together with another
+      session's curved Connections-tree lines (`1418609`). `main` pushed and
+      CI green before tagging; release run 36474704946 published all six
+      assets; manifest checked (version 0.6.0, trusted comment
+      `file:PlugSight_0.6.0_x64-setup.exe` / `version:0.6.0`, installer URL 200).
 
 ## Open questions for the user
 

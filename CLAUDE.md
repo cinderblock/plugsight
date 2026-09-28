@@ -46,15 +46,19 @@ bun run version:bump minor --dry-run  # preview without writing
 - `src-tauri/src/device/watcher.rs` — Real-time PnP event stream (WinRT DeviceWatcher)
 - `src-tauri/src/device/enumerator.rs` — Full SetupAPI device enumeration
 - `src-tauri/src/device/properties.rs` — DEVPKEY property extraction helpers
+- `src-tauri/src/device/history.rs` — Per-device connection history (arrivals/removals from PnP notifications + Windows' arrival dates), persisted to `connection-history.json` in the app data dir; `cargo test` covered
 - `src-tauri/src/device/link/` — Link speed probes, one module per bus: `usb.rs` (hub IOCTLs), `pcie.rs` (link DEVPKEYs), `ethernet.rs` (IP Helper table + Speed & Duplex options), `sata.rs` (ATA IDENTIFY via storage protocol query). Pure parsers have `cargo test` unit tests.
 - `src-tauri/src/device/class_meta.rs` — Device class GUID → name/icon mapping
 - `src-tauri/src/commands.rs` — Tauri IPC commands
 - `src/lib/device-store.ts` — Central SolidJS reactive store (devices, ghosts, categories)
 - `src/lib/updater.ts` — Update system (native Tauri updater + GitHub API fallback)
 - `src/lib/link-speed.ts` — Wording + degraded call for link speeds (pure, tested)
+- `src/lib/connection-time.ts` — Connected-for readout ("20s"…"boot"), drop list, sparkline layout (pure, tested); `clock.ts` is the shared 1 s tick
 - `src/components/DeviceEntry.tsx` — Core device row (live/ghost/error states)
 - `src/components/StatusBadge.tsx` — Large, clear status indicators
 - `src/components/LinkBadge.tsx` — Inline link-speed chip (amber when running below capability)
+- `src/components/ConnectionReadout.tsx` — Row readout: connected-for age + ↻ reconnect chip; `ReconnectSparkline.tsx` draws the drop strip
+- `src/components/HoverCard.tsx` — Portalled hover card (not clipped by the scrolling tree; flips above near the bottom). Use it, not `title=`
 - `src/components/StatusBar.tsx` — Bottom bar with version, counts, update badge/progress
 - `src/styles/animations.css` — Enter/exit/highlight CSS animations
 - `scripts/bump-version.ts` — Version bump automation across all config files

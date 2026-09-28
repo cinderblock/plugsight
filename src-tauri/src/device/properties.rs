@@ -196,6 +196,61 @@ pub fn get_string_list_property(
     }
 }
 
+/// `DEVPROP_TYPE_FILETIME`.
+const DEVPROP_TYPE_FILETIME: u32 = 0x0000_0010;
+
+/// 100 ns ticks between 1601-01-01 (FILETIME's epoch) and 1970-01-01.
+const FILETIME_UNIX_EPOCH: i64 = 116_444_736_000_000_000;
+
+/// When the device last arrived (`DEVPKEY_Device_LastArrivalDate`).
+const DEVPKEY_DEVICE_LAST_ARRIVAL_DATE: DEVPROPKEY = DEVPROPKEY {
+    fmtid: GUID::from_u128(0x83da6326_97a6_4088_9453_a1923f573b29),
+    pid: 102,
+};
+
+/// When the device last left (`DEVPKEY_Device_LastRemovalDate`).
+const DEVPKEY_DEVICE_LAST_REMOVAL_DATE: DEVPROPKEY = DEVPROPKEY {
+    fmtid: GUID::from_u128(0x83da6326_97a6_4088_9453_a1923f573b29),
+    pid: 103,
+};
+
+/// Read a FILETIME property as milliseconds since the Unix epoch.
+pub fn get_filetime_ms_property(
+    dev_info: HDEVINFO,
+    dev_data: &SP_DEVINFO_DATA,
+    key: &DEVPROPKEY,
+) -> Option<i64> {
+    unsafe {
+        let mut prop_type: DEVPROPTYPE = DEVPROPTYPE(0);
+        let mut buffer = [0u8; 8];
+        let mut required_size: u32 = 0;
+        let result = SetupDiGetDevicePropertyW(
+            dev_info,
+            dev_data,
+            key,
+            &mut prop_type,
+            Some(&mut buffer),
+            Some(&mut required_size),
+            0,
+        );
+        if result.is_err() || prop_type.0 != DEVPROP_TYPE_FILETIME {
+            return None;
+        }
+        let ticks = i64::from_le_bytes(buffer);
+        (ticks > FILETIME_UNIX_EPOCH).then(|| (ticks - FILETIME_UNIX_EPOCH) / 10_000)
+    }
+}
+
+/// When Windows says the device last arrived, in ms since the Unix epoch.
+pub fn get_last_arrival_ms(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> Option<i64> {
+    get_filetime_ms_property(dev_info, dev_data, &DEVPKEY_DEVICE_LAST_ARRIVAL_DATE)
+}
+
+/// When Windows says the device last left, in ms since the Unix epoch.
+pub fn get_last_removal_ms(dev_info: HDEVINFO, dev_data: &SP_DEVINFO_DATA) -> Option<i64> {
+    get_filetime_ms_property(dev_info, dev_data, &DEVPKEY_DEVICE_LAST_REMOVAL_DATE)
+}
+
 /// Read a u32 property.
 pub fn get_u32_property(
     dev_info: HDEVINFO,

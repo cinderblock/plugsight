@@ -145,6 +145,12 @@ fn build_device_info(
     // via the interface table, SATA drives via their IDENTIFY data.
     let links = link_probe.links(&instance_id, &parent_id, &class_guid, dev_info, dev_data);
 
+    // Windows' own record of when the device came and went. The reconnect
+    // count and event list are filled in from the connection history later
+    // (`history::History::decorate`), on the paths that report to the UI.
+    let arrived_at = properties::get_last_arrival_ms(dev_info, dev_data);
+    let last_removed_at = properties::get_last_removal_ms(dev_info, dev_data);
+
     // Resolve the canonical class name + icon ID from our known-class table,
     // falling back to the SetupAPI-provided name for unknown GUIDs.
     let meta = class_meta::lookup_class(&class_guid, &class_name_hint);
@@ -164,6 +170,10 @@ fn build_device_info(
         parent_id,
         port_name,
         links,
+        arrived_at,
+        last_removed_at,
+        reconnects: 0,
+        connection_events: Vec::new(),
         is_present: true,
     })
 }

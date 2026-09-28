@@ -55,6 +55,7 @@ use windows::Win32::NetworkManagement::IpHelper::{
 use windows::Win32::Networking::WinSock::AF_UNSPEC;
 
 use super::enumerator;
+use super::history;
 use super::types::{DeviceEvent, DeviceInfo, InstanceId};
 
 /// The event name used for all device change events sent to the frontend.
@@ -91,7 +92,12 @@ pub fn start_watcher(app_handle: AppHandle) -> Result<(), String> {
     // Build the initial snapshot so we can diff against it.
     // The frontend triggers the initial streaming enumeration via a command
     // (after it has subscribed to events), so we just build the known map here.
-    let initial_devices = enumerator::enumerate_all_devices();
+    let mut initial_devices = enumerator::enumerate_all_devices();
+    // Square the connection history with Windows' arrival dates first, so the
+    // snapshot we diff against carries the same reconnect counts the frontend
+    // will be sent.
+    history::with(|h| h.decorate(&mut initial_devices, history::now_ms()));
+    history::save_if_dirty();
     let mut known_map = HashMap::new();
     for device in initial_devices {
         known_map.insert(device.instance_id.clone(), device);
@@ -310,33 +316,74 @@ fn register_cm_notification(app: AppHandle, shared: SharedState) -> Result<(), S
 
 /// PnP notification callback. Invoked from a Windows worker thread for every
 /// device instance lifecycle event. We act on arrival (ENUMERATED or
-/// STARTED) and removal (REMOVED) by scheduling a debounced refresh of the
-/// list. The other actions don't change the device list as observed by
-/// SetupAPI.
+/// STARTED) and removal (REMOVED): record it in the connection history, and
+/// schedule a debounced refresh of the list. The other actions don't change the
+/// device list as observed by SetupAPI.
 unsafe extern "system" fn cm_notify_callback(
     _hnotify: HCMNOTIFICATION,
     context: *const c_void,
     action: CM_NOTIFY_ACTION,
-    _eventdata: *const CM_NOTIFY_EVENT_DATA,
-    _eventdatasize: u32,
+    eventdata: *const CM_NOTIFY_EVENT_DATA,
+    eventdatasize: u32,
 ) -> u32 {
     if context.is_null() {
         return 0;
     }
 
-    // ENUMERATED matters on its own: a device instance that comes back (seen
-    // with GhostCOM re-creating a port it had removed) can arrive with
-    // ENUMERATED and no STARTED, and refreshing on STARTED alone left such a
-    // device missing from the list until something else triggered a pass.
-    if action == CM_NOTIFY_ACTION_DEVICEINSTANCEENUMERATED
-        || action == CM_NOTIFY_ACTION_DEVICEINSTANCESTARTED
-        || action == CM_NOTIFY_ACTION_DEVICEINSTANCEREMOVED
+    // Record the arrival or removal against the device it names, right now.
+    // This is what catches a device that drops and comes back inside one
+    // debounce window: the re-enumeration below would see it present both
+    // before and after, and report nothing.
+    let arrived = action == CM_NOTIFY_ACTION_DEVICEINSTANCEENUMERATED
+        || action == CM_NOTIFY_ACTION_DEVICEINSTANCESTARTED;
+    let removed = action == CM_NOTIFY_ACTION_DEVICEINSTANCEREMOVED;
+    if (arrived || removed)
+        && let Some(instance_id) = unsafe { notified_instance_id(eventdata, eventdatasize) }
     {
+        let now = history::now_ms();
+        log::debug!("PnP notification {action:?} for {instance_id}");
+        history::with(|h| {
+            if removed {
+                h.record_removal(&instance_id, now);
+            } else {
+                h.record_arrival(&instance_id, now);
+            }
+        });
+    }
+
+    // Refresh on every arrival or removal. ENUMERATED matters on its own: a
+    // device instance that comes back (seen with GhostCOM re-creating a port it
+    // had removed) can arrive with ENUMERATED and no STARTED, and refreshing on
+    // STARTED alone left such a device missing from the list until something
+    // else happened to trigger a pass.
+    if arrived || removed {
         let ctx = unsafe { &*(context as *const CmCallbackContext) };
         trigger_reenumerate(ctx.app.clone(), ctx.shared.clone());
     }
 
     0 // ERROR_SUCCESS
+}
+
+/// The device instance ID a `CM_NOTIFY_FILTER_TYPE_DEVICEINSTANCE` notification
+/// carries: a NUL-terminated UTF-16 string at the start of the event data's
+/// union, bounded by the event data size.
+///
+/// # Safety
+/// `eventdata` must be the pointer the notification callback was given, valid
+/// for `size` bytes.
+unsafe fn notified_instance_id(
+    eventdata: *const CM_NOTIFY_EVENT_DATA,
+    size: u32,
+) -> Option<String> {
+    if eventdata.is_null() {
+        return None;
+    }
+    let offset = std::mem::offset_of!(CM_NOTIFY_EVENT_DATA, u);
+    let max_chars = (size as usize).checked_sub(offset)? / 2;
+    let start = unsafe { (eventdata as *const u8).add(offset) as *const u16 };
+    let chars = unsafe { std::slice::from_raw_parts(start, max_chars) };
+    let end = chars.iter().position(|&c| c == 0).unwrap_or(chars.len());
+    (end > 0).then(|| String::from_utf16_lossy(&chars[..end]))
 }
 
 /// Debounced re-enumeration: when a DeviceWatcher event fires, wait a short time
@@ -382,7 +429,9 @@ fn trigger_reenumerate(app: AppHandle, shared: SharedState) {
 /// Re-enumerate all devices via SetupAPI, diff against the known state,
 /// and emit Added/Removed/Updated events for anything that changed.
 fn do_reenumerate_and_diff(app: &AppHandle, shared: &SharedState) {
-    let new_devices = enumerator::enumerate_all_devices();
+    let mut new_devices = enumerator::enumerate_all_devices();
+    let now = history::now_ms();
+    history::with(|h| h.decorate(&mut new_devices, now));
 
     let mut new_map: HashMap<InstanceId, DeviceInfo> = HashMap::new();
     for device in new_devices {
@@ -399,6 +448,7 @@ fn do_reenumerate_and_diff(app: &AppHandle, shared: &SharedState) {
     // Find added devices (in new but not in old).
     for (id, device) in &new_map {
         if !state.known.contains_key(id) {
+            log::debug!("Emitting Added {id}");
             let event = DeviceEvent::Added {
                 device: device.clone(),
             };
@@ -409,6 +459,10 @@ fn do_reenumerate_and_diff(app: &AppHandle, shared: &SharedState) {
     // Find removed devices (in old but not in new).
     for id in state.known.keys() {
         if !new_map.contains_key(id) {
+            // Normally already recorded by the PnP notification; this covers a
+            // missed one. A duplicate is ignored.
+            history::with(|h| h.record_removal(id, now));
+            log::debug!("Emitting Removed {id}");
             let event = DeviceEvent::Removed {
                 instance_id: id.clone(),
             };
@@ -430,6 +484,9 @@ fn do_reenumerate_and_diff(app: &AppHandle, shared: &SharedState) {
 
     // Replace the known state with the new snapshot.
     state.known = new_map;
+    drop(state);
+
+    history::save_if_dirty();
 }
 
 /// Force an immediate synchronous re-enumeration + diff, bypassing the debounce.
@@ -456,5 +513,8 @@ fn device_changed(old: &DeviceInfo, new: &DeviceInfo) -> bool {
         || old.manufacturer != new.manufacturer
         || old.class_name != new.class_name
         || old.links != new.links
+        || old.arrived_at != new.arrived_at
+        || old.reconnects != new.reconnects
+        || old.connection_events.last() != new.connection_events.last()
         || old.is_present != new.is_present
 }

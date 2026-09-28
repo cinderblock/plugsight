@@ -7,10 +7,14 @@
 
 import type { Component } from 'solid-js';
 import { Show, For } from 'solid-js';
-import { selectedDevice, setSelectedId, usbHubHalves } from '~/lib/device-store';
+import { selectedDevice, setSelectedId, usbHubHalves, bootTime } from '~/lib/device-store';
 import { openDeviceProperties } from '~/lib/tauri';
-import { statusLabel, hasDeviceProblem } from '~/lib/types';
+import { statusLabel, hasDeviceProblem, type DeviceInfo } from '~/lib/types';
 import { describeLink } from '~/lib/link-speed';
+import { connectedReadout, dropsOf, formatMoment, longDuration } from '~/lib/connection-time';
+import { useNow } from '~/lib/clock';
+import ReconnectSparkline from './ReconnectSparkline';
+import { ReconnectIcon } from './ConnectionReadout';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
 import Tooltip from './Tooltip';
@@ -112,6 +116,8 @@ const DeviceDetail: Component = () => {
               </Show>
             </div>
 
+            <ConnectionSection device={device()} isGhost={isGhost()} />
+
             {/* Links: the numbers the row chips abbreviate, spelled out, one
                 section per link (a USB or PCIe network adapter has two). */}
             <For each={device().links}>
@@ -206,6 +212,74 @@ const DeviceDetail: Component = () => {
           </div>
         );
       }}
+    </Show>
+  );
+};
+
+/** The most recent drops listed in the detail pane. */
+const LISTED_DROPS = 20;
+
+/**
+ * When the device arrived and every time it dropped out: the row readouts,
+ * spelled out. The list is the sparkline's table view.
+ */
+const ConnectionSection: Component<{ device: DeviceInfo; isGhost: boolean }> = props => {
+  const now = useNow();
+  const readout = () => connectedReadout(props.device.arrivedAt, bootTime(), now());
+  const drops = () => dropsOf(props.device.connectionEvents).reverse();
+
+  return (
+    <Show when={readout() || props.device.reconnects > 0}>
+      <div class="mb-6">
+        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Connection</h3>
+        <div class="space-y-3">
+          <Show when={!props.isGhost && props.device.arrivedAt !== null && readout()}>
+            {r => (
+              <DetailRow
+                label={r().sinceBoot ? 'Present since boot' : 'Connected'}
+                value={`${formatMoment(props.device.arrivedAt!)} (${longDuration(now() - props.device.arrivedAt!)} ago)`}
+              />
+            )}
+          </Show>
+
+          <div>
+            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Reconnects
+            </span>
+            <p class="text-sm mt-0.5 text-gray-800 dark:text-gray-200 flex items-center gap-1">
+              <Show when={props.device.reconnects > 0} fallback="None recorded">
+                <ReconnectIcon class="w-3.5 h-3.5 text-amber-500" />
+                {props.device.reconnects}
+              </Show>
+            </p>
+          </div>
+
+          <Show when={drops().length > 0}>
+            <ReconnectSparkline events={props.device.connectionEvents} now={now()} height={24} interactive />
+            <ul class="space-y-0.5">
+              <For each={drops().slice(0, LISTED_DROPS)}>
+                {d => (
+                  <li class="text-xs text-gray-700 dark:text-gray-300 tabular-nums">
+                    {formatMoment(d.lostAt)}
+                    <span class="text-gray-400 dark:text-gray-500">
+                      {' '}
+                      · {d.backAt === null ? 'still away' : `away ${longDuration(d.backAt - d.lostAt)}`}
+                    </span>
+                  </li>
+                )}
+              </For>
+            </ul>
+            <Show when={drops().length > LISTED_DROPS}>
+              <p class="text-xs text-gray-400 dark:text-gray-500">and {drops().length - LISTED_DROPS} earlier</p>
+            </Show>
+          </Show>
+
+          <p class="text-xs text-gray-400 dark:text-gray-500">
+            Counted from Windows' device notifications while PlugSight runs, plus the latest drop Windows remembers from
+            while it wasn't. Kept 90 days.
+          </p>
+        </div>
+      </div>
     </Show>
   );
 };

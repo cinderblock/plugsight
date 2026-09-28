@@ -52,6 +52,11 @@ USB speeds come from the parent hub (the same hub IOCTLs USBView uses). Windows 
 
 Ethernet speed comes from the IP Helper interface table; the adapter's maximum is the fastest option in its own Speed & Duplex setting, and a speed fixed by hand there is shown but not flagged. An unplugged adapter shows **LAN no link**, and the chip refreshes when a cable is plugged in or the link renegotiates. Wi-Fi gets no chip: its rate changes every few seconds, so any number shown would already be stale. SATA speed comes from the drive's IDENTIFY data (words 76 and 77) through the storage stack's protocol query, which needs no admin rights; drives too old to report their negotiated speed get no chip.
 
+### Connected Time & Reconnect History
+Every row ends with how long the device has been connected — **20s**, **50m**, **5h**, **2d**, or **boot** for devices that have been there since the machine started — with the exact time on hover. The time comes from Windows' own record of when the device arrived, so it's right even for devices that were plugged in before PlugSight started.
+
+A device that has dropped out and come back carries a **↻ N** reconnect count, amber if the latest drop was within a day. Hover it for a sparkline of when the drops happened; the detail panel lists each one with its time and how long the device was away, and hovering a tick on its sparkline names that drop. Drops are recorded as Windows reports them, device by device, so a flaky USB device that disconnects for a fraction of a second while you're away still leaves a mark. PlugSight also fills in the latest drop Windows remembers from while it wasn't running. History is kept for 90 days.
+
 ### Serial Port Notifications
 Get a **"COM5 connected"** popup the moment a serial port is plugged in or removed — an in-app toast when the PlugSight window is focused, or a native Windows notification when it's in the background. A toolbar bell button cycles what triggers a popup: off, COM/serial ports only, or every device change. The COM/LPT port name (read from the device's registry `PortName`) also appears in the detail panel.
 

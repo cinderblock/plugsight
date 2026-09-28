@@ -21,7 +21,20 @@ export interface DeviceInfo {
    * A USB or PCIe network adapter has two. Empty when Windows reports none.
    */
   links: LinkInfo[];
+  /** When the device last arrived, per Windows (ms since epoch); null if not recorded. */
+  arrivedAt: number | null;
+  /** Times it has come back after disconnecting, from the backend's connection history. */
+  reconnects: number;
+  /** Its most recent arrivals and removals (up to 100), oldest first. */
+  connectionEvents: ConnEvent[];
   isPresent: boolean;
+}
+
+/** Mirrors the Rust `ConnEvent`: one arrival or removal. */
+export interface ConnEvent {
+  /** Milliseconds since the Unix epoch. */
+  t: number;
+  kind: 'arrive' | 'remove';
 }
 
 /** Mirrors the Rust `UsbSpeed` enum, slowest to fastest. */

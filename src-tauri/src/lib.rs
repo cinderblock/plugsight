@@ -16,8 +16,16 @@ pub fn run() {
             commands::stream_initial_devices,
             commands::scan_for_hardware_changes,
             commands::open_device_properties,
+            commands::system_boot_time,
         ])
         .setup(|app| {
+            // Load the connection history before the first enumeration reads it.
+            use tauri::Manager;
+            match app.path().app_data_dir() {
+                Ok(dir) => device::history::init(&dir),
+                Err(e) => log::warn!("No app data dir; connection history won't persist: {e}"),
+            }
+
             // Start the real-time device watcher on a background thread.
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {

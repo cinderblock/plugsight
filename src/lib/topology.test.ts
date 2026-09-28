@@ -34,6 +34,9 @@ function device(instanceId: string, name: string, parentId = ''): DeviceInfo {
     parentId,
     portName: null,
     links: [],
+    arrivedAt: null,
+    reconnects: 0,
+    connectionEvents: [],
     isPresent: true,
   };
 }

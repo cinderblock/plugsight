@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use crate::device::class_icons;
 use crate::device::class_meta;
 use crate::device::enumerator;
+use crate::device::history;
 use crate::device::types::{ClassMeta, DeviceInfo};
 
 /// Return all currently present devices.
@@ -13,7 +14,9 @@ use crate::device::types::{ClassMeta, DeviceInfo};
 /// devices incrementally via the DeviceWatcher event stream.
 #[tauri::command]
 pub fn get_all_devices() -> Result<Vec<DeviceInfo>, String> {
-    Ok(enumerator::enumerate_all_devices())
+    let mut devices = enumerator::enumerate_all_devices();
+    history::with(|h| h.decorate(&mut devices, history::now_ms()));
+    Ok(devices)
 }
 
 /// Stream the initial device enumeration to the frontend as individual Added events.
@@ -25,7 +28,9 @@ pub fn stream_initial_devices(app: tauri::AppHandle) -> Result<(), String> {
     use crate::device::types::DeviceEvent;
     use tauri::Emitter;
 
-    let devices = enumerator::enumerate_all_devices();
+    let mut devices = enumerator::enumerate_all_devices();
+    history::with(|h| h.decorate(&mut devices, history::now_ms()));
+    history::save_if_dirty();
     for device in devices {
         let _ = app.emit("device-event", &DeviceEvent::Added { device });
     }
@@ -36,7 +41,21 @@ pub fn stream_initial_devices(app: tauri::AppHandle) -> Result<(), String> {
 /// Get detailed info for a single device by instance ID.
 #[tauri::command]
 pub fn get_device_detail(instance_id: String) -> Result<Option<DeviceInfo>, String> {
-    Ok(enumerator::get_device_by_instance_id(&instance_id))
+    let mut device = enumerator::get_device_by_instance_id(&instance_id);
+    if let Some(device) = device.as_mut() {
+        history::with(|h| h.decorate(std::slice::from_mut(device), history::now_ms()));
+    }
+    Ok(device)
+}
+
+/// When the machine booted, in milliseconds since the Unix epoch: now minus the
+/// system uptime. The frontend shows devices that arrived with the boot as
+/// "boot" rather than an age. (Fast Startup doesn't disturb this: the uptime
+/// clock and Windows' recorded boot time agree.)
+#[tauri::command]
+pub fn system_boot_time() -> i64 {
+    let uptime = unsafe { windows::Win32::System::SystemInformation::GetTickCount64() } as i64;
+    history::now_ms() - uptime
 }
 
 /// Return metadata for all known device setup classes.

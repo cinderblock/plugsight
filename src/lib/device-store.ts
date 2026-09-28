@@ -14,7 +14,7 @@ import { createStore, produce } from 'solid-js/store';
 import { linkSearchText } from './link-speed';
 import type { DeviceInfo, DeviceEvent, GhostEntry, DeviceCategory, DisplayDevice } from './types';
 import { hasDeviceProblem } from './types';
-import { onDeviceEvent, getAllDevices } from './tauri';
+import { onDeviceEvent, getAllDevices, getBootTime } from './tauri';
 import { loadClassIcons } from './icon-cache';
 import {
   attachTwins,
@@ -302,7 +302,13 @@ function handleDeviceRemoved(instanceId: string) {
     // current `ghostTimeoutMs()` setting, so changing the setting affects
     // existing ghosts without re-stamping.
     setState('ghosts', instanceId, {
-      device: { ...device, isPresent: false },
+      // The ghost's history ends in this removal, so its detail pane shows the
+      // device as away rather than still connected.
+      device: {
+        ...device,
+        isPresent: false,
+        connectionEvents: [...device.connectionEvents, { t: now, kind: 'remove' }],
+      },
       removedAt: now,
     });
 
@@ -879,6 +885,9 @@ function clearAllFilters() {
 // ── Initialization ────────────────────────────────────────────────────────
 
 /** Call this once from the root component to wire up the event listener and ghost sweeper. */
+/** When the machine booted (ms since epoch), once the backend has said. */
+const [bootTime, setBootTime] = createSignal<number | null>(null);
+
 function initDeviceStore() {
   let unlisten: (() => void) | null = null;
 
@@ -886,6 +895,11 @@ function initDeviceStore() {
     // 1. Subscribe to incremental device events first, so no change that happens
     //    after our initial snapshot is missed.
     unlisten = await onDeviceEvent(handleDeviceEvent);
+
+    // The boot time lets connected-for readouts say "boot" instead of an age.
+    getBootTime()
+      .then(setBootTime)
+      .catch(e => console.error('Could not read the boot time:', e));
 
     // 2. Load the initial device list via the command's RETURN VALUE rather than
     //    a fire-and-forget emitted stream. On a cold start the webview's event
@@ -985,6 +999,7 @@ export {
   setHoveredId,
   relationIndex,
   usbHubHalves,
+  bootTime,
   // Actions
   toggleCategory,
   expandAllCategories,

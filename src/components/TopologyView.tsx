@@ -37,6 +37,7 @@ import { openDeviceProperties } from '~/lib/tauri';
 import StatusBadge from './StatusBadge';
 import DeviceIcon from './DeviceIcon';
 import LinkBadge from './LinkBadge';
+import ConnectionReadout from './ConnectionReadout';
 
 /** Whether identical-sibling grouping applies (off while filtering, where the
  *  tree is forced open and grouped/dimmed-context rows would mislead). */
@@ -326,45 +327,50 @@ const TopologyNode: Component<{
             both views and persists. */}
           {/* Floats over the row's right edge on hover instead of reserving its
             width while invisible, which starved deep rows of room for the name. */}
-          <div class="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-md bg-gray-100/95 shadow-sm opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 dark:bg-gray-800/95">
-            {/* Properties — also on double-click, but nothing advertises that */}
-            <div
-              role="button"
-              class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
-              aria-label="Properties"
-              onClick={e => {
-                e.stopPropagation();
-                openDeviceProperties(device().instanceId);
-              }}
-            >
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            </div>
+          <span class="relative ml-auto shrink-0 flex items-center">
+            <div class="pointer-events-none absolute right-full mr-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-md bg-gray-100/95 shadow-sm opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 dark:bg-gray-800/95">
+              {/* Properties — also on double-click, but nothing advertises that */}
+              <div
+                role="button"
+                class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+                aria-label="Properties"
+                onClick={e => {
+                  e.stopPropagation();
+                  openDeviceProperties(device().instanceId);
+                }}
+              >
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </div>
 
-            {/* Hide — the tree closes up around it; children reparent upward.
-              A folded hub row hides both halves, or the other would pop back
-              up as a row of its own. */}
-            <div
-              role="button"
-              class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
-              aria-label="Hide this device"
-              onClick={e => {
-                e.stopPropagation();
-                hideDevice(device().instanceId);
-                const other = twin();
-                if (other) hideDevice(other.instanceId);
-              }}
-            >
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
-                <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
-                <line x1="1" y1="1" x2="23" y2="23" />
-              </svg>
+              {/* Hide — the tree closes up around it; children reparent upward.
+                A folded hub row hides both halves, or the other would pop back
+                up as a row of its own. */}
+              <div
+                role="button"
+                class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+                aria-label="Hide this device"
+                onClick={e => {
+                  e.stopPropagation();
+                  hideDevice(device().instanceId);
+                  const other = twin();
+                  if (other) hideDevice(other.instanceId);
+                }}
+              >
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+                  <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+              </div>
             </div>
-          </div>
+            {/* How long it's been connected, and how often it has dropped out. A
+              folded USB 3 hub reports its USB 3 half, the one the row stands for. */}
+            <ConnectionReadout device={device()} showAge />
+          </span>
         </div>
         {/* After the row so the lines paint over its hover/selected background. */}
         <TreeLines depth={props.depth} rails={props.rails} branch={props.branch} hue={props.hue} open={open()} />

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::history::ConnEvent;
+
 /// Unique, stable identifier for a device (the PnP instance ID).
 pub type InstanceId = String;
 
@@ -42,6 +44,18 @@ pub struct DeviceInfo {
     /// link, then an Ethernet or SATA link when the device has one. A PCIe or
     /// USB network adapter has both. Empty when Windows reports none.
     pub links: Vec<LinkInfo>,
+    /// When the device last arrived, per Windows (`DEVPKEY_Device_LastArrivalDate`),
+    /// in milliseconds since the Unix epoch. Survives app restarts.
+    pub arrived_at: Option<i64>,
+    /// When the device last left, per Windows. Only used to date a drop the app
+    /// didn't see; not sent to the frontend.
+    #[serde(skip)]
+    pub last_removed_at: Option<i64>,
+    /// How many times the device has come back after disconnecting, from the
+    /// connection history (`history.rs`).
+    pub reconnects: u32,
+    /// Its most recent arrivals and removals, oldest first.
+    pub connection_events: Vec<ConnEvent>,
     /// Whether this device is currently present (connected).
     pub is_present: bool,
 }

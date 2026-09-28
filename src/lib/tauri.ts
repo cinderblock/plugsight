@@ -41,6 +41,11 @@ export async function scanForHardwareChanges(): Promise<void> {
   return invoke<void>('scan_for_hardware_changes');
 }
 
+/** When the machine booted, in ms since the Unix epoch. */
+export async function getBootTime(): Promise<number> {
+  return invoke<number>('system_boot_time');
+}
+
 /** Open the native Windows device properties dialog for a device. */
 export async function openDeviceProperties(instanceId: string): Promise<void> {
   return invoke<void>('open_device_properties', { instanceId });

@@ -20,15 +20,19 @@ with the row content.
 
 ## Decisions already made (don't re-ask)
 
-- **CSS borders, not an SVG overlay.** An elbow is a div with `border-left` +
-  `border-bottom` + `border-bottom-left-radius`; the trunk is a `border-left` strip.
-  They live inside the row / children container, so they follow collapse, filtering and
-  ghost fades for free and never need `getBoundingClientRect` (unlike `RelationArrows`).
+- **Per-row SVG, not CSS boxes and not an overlay** (revised 2026-09-28; see
+  "Redraw" below). Each row carries one small SVG, positioned over the row's border box,
+  that draws every line crossing that row: pass-through *rails* for ancestor trunks, the
+  *elbow* from its parent's trunk (plus the trunk's continuation unless last), and the
+  *stub* under its own chevron when open. Still no DOM measurement (unlike
+  `RelationArrows`): rows abut, so a trunk is a stack of per-row segments at one x.
 - **Trunk origin is the parent's chevron.** The line drops from just under the chevron
   glyph, so it reads as "the thing you clicked to open these".
-- **Half-height positioning, no fixed row height.** Elbow is `top:0; height:calc(50% + w/2)`;
-  trunk continuation starts where the curve peels off (`top: calc(50% + w/2 - R)`) and
-  runs to the row bottom, then `top:0; bottom:0` on the child's own children container.
+- **Midline origin, no fixed row height.** The row SVG nests an inner `<svg y="50%"
+  overflow="visible">`, so paths are laid out from the row's midline; vertical runs are
+  drawn ±1000px long and the outer SVG (`overflow: hidden`) clips them to the row plus a
+  1px bleed into each neighbour, so stacked segments overlap instead of meeting at an
+  anti-aliased seam.
 - **Opaque muted colours, not alpha.** The elbow's arc and the trunk continuation overlap
   by a sliver at the tangent; with translucent strokes that showed as a darker notch.
   Opaque `oklch(0.8 0.05 H)` (light) / `oklch(0.5 0.05 H)` (dark) sidesteps it entirely.
@@ -51,6 +55,33 @@ with the row content.
 - [x] Visual check in `cargo tauri dev` (light + dark, via CDP colour-scheme emulation)
 - [x] README Connections section mentions the lines
 - [x] Committed on `main`: "Trace the Connections tree's wiring with curved parent-to-child lines"
+
+## Redraw (2026-09-28): the lines didn't line up
+
+Cameron: "the line segments don't line up for some reason. are you using text/font
+glyphs to make the arrows? can we draw them instead?" — No glyphs (the chevrons are SVG
+icons); the CSS version was the cause. Zoomed screenshots showed every trunk jogging
+**4px** sideways where a piece positioned inside a row (elbow, lower trunk, stub) handed
+off to a strip in the children container.
+
+Root cause: an absolutely positioned child is placed from its containing block's
+**padding** box. The rows have a 4px `border-l-4` accent, so pieces inside a row were
+offset from its padding box, 4px right of the strips in the (borderless) children
+container, which used the same x formula from their border box. `trunkX` added the 4px
+border and was right for one frame and wrong for the other.
+
+Fix: `TreeLines` draws everything per row in one frame. The SVG sits in a wrapper
+`div.relative` that is the row's border box (the row is its only in-flow child), placed
+*after* the row so the lines paint over its hover/selected background, and outside the
+row's `opacity-40` so a trunk doesn't dim and brighten as it passes dimmed context rows.
+`railX(level) = 16·level + 20` (border-box chevron centre). Odd stroke widths sit on
+half-pixel x/y so 1px and 3px lines cover whole device pixels. Rails are passed down as
+`{level, hue, through}`: a node's children see its rails plus the trunk it hangs from,
+`through = !branch.last` (`railsBelow`).
+
+Verified at 100% scaling with 5–8x nearest-neighbour zooms of window captures: trunks
+continuous through every row, elbows and stubs meet exactly, no row-boundary seams; ×N
+group rows and collapsed nodes correct; lines at full strength through dimmed rows.
 
 ## Findings / gotchas
 
@@ -79,6 +110,14 @@ with the row content.
   stage them.
 
 ## Things not to do
+
+- Don't position line pieces from two different containing blocks. Everything a row
+  draws is in that row's border-box frame; nothing lives in children containers.
+- Don't take window screenshots of the dev app and then click near a row's right edge
+  to "move focus": the hover tray floats there, and the click hides a device. (It did,
+  once; "Clear filters" restored it, since nothing had been hidden before.) Toolbar
+  toggles clicked via synthetic input also didn't always register one-to-one; verify the
+  resulting state in the tree, not the button styling.
 
 - Don't measure DOM rects for these lines — they are structural, not overlay.
 - Don't change the 16 px per-level indent to make room; the 8 px arc fits as is.

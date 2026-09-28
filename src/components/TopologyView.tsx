@@ -225,8 +225,6 @@ const TopologyNode: Component<{
   const isRecentChange = () =>
     recentChanges().has(device().instanceId) || (twin() !== undefined && recentChanges().has(twin()!.instanceId));
   const hasProblem = () => hasDeviceProblem(status());
-  /** Both halves' link chips: the USB 3 side first, then the USB 2 side. */
-  const links = () => [...device().links, ...(twin()?.links ?? [])];
 
   /** Colored left accent only when there's a problem; transparent otherwise. */
   const borderClass = () => {
@@ -316,9 +314,10 @@ const TopologyNode: Component<{
 
           {/* Upstream link speed — this is the view where a slow link's place in
             the chain is visible, so the chip sits right on the row. A folded
-            USB 3 hub shows both sides: "5 Gbps" and "480 Mbps". */}
+            USB 3 hub shows its USB 3 side only; the USB 2 side's 480 Mbps is
+            in the detail pane. */}
           <span class="flex min-w-0 items-center gap-1 overflow-hidden">
-            <LinkBadge links={links()} />
+            <LinkBadge links={device().links} />
           </span>
 
           {/* Action buttons (visible on hover) — div, not button, so they don't

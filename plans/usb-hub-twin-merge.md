@@ -33,7 +33,8 @@ and said "keep going" after v0.5.0; the recommendation in
 - Merge only when the twin is positively identified. A half whose companion
   can't be found, or whose USB 3 side is down, stays a separate row — that
   is exactly the case the amber chips exist to expose.
-- The row shows both halves' speed chips (`5 Gbps` `480 Mbps`); children of
+- The row shows the USB 3 half's speed chip only (Cameron, 2026-09-28: "the
+  fast is enough"; it first shipped with both in v0.6.0); children of
   both halves hang under it, each with its own chip.
 - Status shown is the worse of the two halves. Search and the problems
   filter match either half. Hide hides both. Selection highlights the row if

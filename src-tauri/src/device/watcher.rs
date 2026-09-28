@@ -41,10 +41,11 @@ use tauri::{AppHandle, Emitter};
 use windows::Devices::Enumeration::{DeviceInformation, DeviceInformationUpdate, DeviceWatcher};
 use windows::Foundation::TypedEventHandler;
 use windows::Win32::Devices::DeviceAndDriverInstallation::{
-    CM_NOTIFY_ACTION, CM_NOTIFY_ACTION_DEVICEINSTANCEREMOVED,
-    CM_NOTIFY_ACTION_DEVICEINSTANCESTARTED, CM_NOTIFY_EVENT_DATA, CM_NOTIFY_FILTER,
-    CM_NOTIFY_FILTER_0, CM_NOTIFY_FILTER_FLAG_ALL_DEVICE_INSTANCES,
-    CM_NOTIFY_FILTER_TYPE_DEVICEINSTANCE, CM_Register_Notification, CR_SUCCESS, HCMNOTIFICATION,
+    CM_NOTIFY_ACTION, CM_NOTIFY_ACTION_DEVICEINSTANCEENUMERATED,
+    CM_NOTIFY_ACTION_DEVICEINSTANCEREMOVED, CM_NOTIFY_ACTION_DEVICEINSTANCESTARTED,
+    CM_NOTIFY_EVENT_DATA, CM_NOTIFY_FILTER, CM_NOTIFY_FILTER_0,
+    CM_NOTIFY_FILTER_FLAG_ALL_DEVICE_INSTANCES, CM_NOTIFY_FILTER_TYPE_DEVICEINSTANCE,
+    CM_Register_Notification, CR_SUCCESS, HCMNOTIFICATION,
 };
 
 use windows::Win32::Foundation::{HANDLE, NO_ERROR};
@@ -308,9 +309,10 @@ fn register_cm_notification(app: AppHandle, shared: SharedState) -> Result<(), S
 }
 
 /// PnP notification callback. Invoked from a Windows worker thread for every
-/// device instance lifecycle event. We only care about arrival/removal —
-/// the other actions (ENUMERATED for existing devices, QUERY_REMOVE etc.)
-/// don't change the device list as observed by SetupAPI.
+/// device instance lifecycle event. We act on arrival (ENUMERATED or
+/// STARTED) and removal (REMOVED) by scheduling a debounced refresh of the
+/// list. The other actions don't change the device list as observed by
+/// SetupAPI.
 unsafe extern "system" fn cm_notify_callback(
     _hnotify: HCMNOTIFICATION,
     context: *const c_void,
@@ -322,7 +324,12 @@ unsafe extern "system" fn cm_notify_callback(
         return 0;
     }
 
-    if action == CM_NOTIFY_ACTION_DEVICEINSTANCESTARTED
+    // ENUMERATED matters on its own: a device instance that comes back (seen
+    // with GhostCOM re-creating a port it had removed) can arrive with
+    // ENUMERATED and no STARTED, and refreshing on STARTED alone left such a
+    // device missing from the list until something else triggered a pass.
+    if action == CM_NOTIFY_ACTION_DEVICEINSTANCEENUMERATED
+        || action == CM_NOTIFY_ACTION_DEVICEINSTANCESTARTED
         || action == CM_NOTIFY_ACTION_DEVICEINSTANCEREMOVED
     {
         let ctx = unsafe { &*(context as *const CmCallbackContext) };

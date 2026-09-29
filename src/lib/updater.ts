@@ -40,6 +40,15 @@ const [releaseUrl, setReleaseUrl] = createSignal<string | null>(null);
 const [updateAvailable, setUpdateAvailable] = createSignal(false);
 const [checking, setChecking] = createSignal(false);
 
+/**
+ * What an update check found. `failed` is kept distinct from `current`: to the
+ * user a failed check used to look exactly like "you're up to date".
+ */
+export type CheckOutcome = 'available' | 'current' | 'failed';
+
+/** The most recent completed check, for "last checked" and manual-check feedback. */
+const [lastCheck, setLastCheck] = createSignal<{ at: number; outcome: CheckOutcome } | null>(null);
+
 /** Whether an in-app update is possible (vs. needing to open the browser). */
 const [canAutoUpdate, setCanAutoUpdate] = createSignal(false);
 
@@ -179,10 +188,10 @@ function isNewer(current: string, latest: string): boolean {
  * Try the Tauri plugin updater first. This works for installed builds
  * (NSIS/MSI) where the updater can download and apply a signed update.
  *
- * Returns true if the native updater found an update (or handled the check).
- * Returns false if the plugin isn't available (portable build, dev mode, etc.).
+ * Returns the outcome, or null if the plugin couldn't check (portable build,
+ * dev mode, unreachable manifest) and the GitHub API should be asked instead.
  */
-async function tryNativeUpdater(): Promise<boolean> {
+async function tryNativeUpdater(): Promise<CheckOutcome | null> {
   try {
     const update = await check();
     if (update) {
@@ -192,11 +201,11 @@ async function tryNativeUpdater(): Promise<boolean> {
       setCanAutoUpdate(true);
       // Try to get the release URL for display purposes.
       setReleaseUrl(`https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/tag/v${update.version}`);
-      return true;
+      return 'available';
     }
     // Plugin worked but no update available.
     setUpdateAvailable(false);
-    return true;
+    return 'current';
   } catch (err) {
     // Plugin unavailable (portable build, dev mode) or the endpoint is
     // unreachable / has no manifest — fall through to the GitHub API.
@@ -205,7 +214,7 @@ async function tryNativeUpdater(): Promise<boolean> {
     // from "you're up to date", which is how three releases shipped with no
     // latest.json at all before anyone noticed in-app updates never ran.
     console.warn('Native updater check failed; falling back to GitHub Releases API:', err);
-    return false;
+    return null;
   }
 }
 
@@ -215,7 +224,7 @@ async function tryNativeUpdater(): Promise<boolean> {
  * Poll GitHub Releases API with ETag caching to check for newer versions.
  * Used when the native Tauri updater isn't available.
  */
-async function checkViaGitHub() {
+async function checkViaGitHub(): Promise<CheckOutcome> {
   try {
     const headers: Record<string, string> = {
       Accept: 'application/vnd.github.v3+json',
@@ -228,14 +237,12 @@ async function checkViaGitHub() {
 
     // 304 Not Modified — cached data is still valid.
     if (response.status === 304 && cachedRelease) {
-      applyGitHubRelease(cachedRelease);
-      return;
+      return applyGitHubRelease(cachedRelease);
     }
 
-    if (!response.ok) {
-      // 404 = no releases yet, other errors = transient. Either way, ignore.
-      return;
-    }
+    // 404 = no releases yet, so nothing newer. Anything else is a failure.
+    if (response.status === 404) return 'current';
+    if (!response.ok) return 'failed';
 
     // Cache the ETag for next request.
     const etag = response.headers.get('ETag');
@@ -247,39 +254,41 @@ async function checkViaGitHub() {
     const tagName: string = release.tag_name ?? '';
     const htmlUrl: string = release.html_url ?? '';
 
-    if (tagName) {
-      cachedRelease = { tag_name: tagName, html_url: htmlUrl };
-      applyGitHubRelease(cachedRelease);
-    }
+    if (!tagName) return 'failed';
+    cachedRelease = { tag_name: tagName, html_url: htmlUrl };
+    return applyGitHubRelease(cachedRelease);
   } catch {
-    // Network errors are silently ignored — update checking is best-effort.
+    // Network error. Periodic checks stay quiet about it; a manual check
+    // reports it.
+    return 'failed';
   }
 }
 
-function applyGitHubRelease(release: { tag_name: string; html_url: string }) {
+function applyGitHubRelease(release: { tag_name: string; html_url: string }): CheckOutcome {
   setLatestVersion(release.tag_name);
   setReleaseUrl(release.html_url);
   setCanAutoUpdate(false);
 
   const current = currentVersion();
-  if (current && isNewer(current, release.tag_name)) {
-    setUpdateAvailable(true);
-  } else {
-    setUpdateAvailable(false);
-  }
+  const newer = current !== '' && isNewer(current, release.tag_name);
+  setUpdateAvailable(newer);
+  return newer ? 'available' : 'current';
 }
 
 // ── Unified check ─────────────────────────────────────────────────────────
 
-async function checkForUpdates() {
-  if (checking()) return;
+/**
+ * Check for a newer release: the native updater first, the GitHub API as the
+ * fallback. Returns what it found, or null if a check was already running.
+ */
+async function checkForUpdates(): Promise<CheckOutcome | null> {
+  if (checking()) return null;
   setChecking(true);
 
   try {
-    const handled = await tryNativeUpdater();
-    if (!handled) {
-      await checkViaGitHub();
-    }
+    const outcome = (await tryNativeUpdater()) ?? (await checkViaGitHub());
+    setLastCheck({ at: Date.now(), outcome });
+    return outcome;
   } finally {
     setChecking(false);
   }
@@ -370,6 +379,8 @@ export {
   updateAvailable,
   canAutoUpdate,
   updateProgress,
+  checking,
+  lastCheck,
   releaseUrl,
   openReleasePage,
   installUpdate,

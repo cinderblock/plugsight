@@ -70,7 +70,7 @@ Get a **"COM5 connected"** popup the moment a serial port is plugged in or remov
 Search query, filter state, category expansion, and hidden devices/categories are all saved to `localStorage` and restored on next launch.
 
 ### In-App Auto-Updates
-Installed builds (NSIS/MSI) use Tauri's native updater to download, verify, and install updates seamlessly — with a progress bar in the status bar. Portable builds fall back to polling GitHub Releases and showing a badge that opens the download page.
+Installed builds (NSIS/MSI) use Tauri's native updater to download, verify, and install updates seamlessly. Portable builds fall back to polling GitHub Releases. Checks run on launch and every 30 minutes, and clicking the version number in the bottom-left corner checks right away. Everything about updates appears right beside that version number: "Checking…" while it looks, "Up to date" or "Couldn't check for updates" after a check you asked for, and an **Update to x.y.z** badge when there's a newer release — which installs in place with its download progress shown in the same spot, or, for portable builds, opens the release page.
 
 ## Tech Stack
 

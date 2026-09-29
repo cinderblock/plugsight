@@ -14,13 +14,14 @@
  * - `placement="top"` for controls near the window's bottom edge (e.g. the
  *   status bar) so the label opens upward.
  * - `align="right"` for controls near the right edge so it grows leftward.
+ * - `align="left"` for controls near the left edge so it grows rightward.
  */
 
 import type { Component, JSX } from 'solid-js';
 
 export const Tooltip: Component<{
   text: string;
-  align?: 'center' | 'right';
+  align?: 'center' | 'right' | 'left';
   placement?: 'top' | 'bottom';
   children: JSX.Element;
 }> = props => (
@@ -32,8 +33,9 @@ export const Tooltip: Component<{
       classList={{
         'top-full mt-2': props.placement !== 'top',
         'bottom-full mb-2': props.placement === 'top',
-        'left-1/2 -translate-x-1/2': props.align !== 'right',
+        'left-1/2 -translate-x-1/2': props.align === undefined || props.align === 'center',
         'right-0': props.align === 'right',
+        'left-0': props.align === 'left',
       }}
     >
       {props.text}

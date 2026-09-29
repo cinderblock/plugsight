@@ -94,6 +94,32 @@ These are the things that cost time — all verified, not assumed.
       one v0.2.2 clients accept; what's still unobserved is a real install
       downloading and restarting into v0.3.0 (checks every 30 min, or on launch).
 
+## Follow-up (2026-09-28): version is the control; UI lives beside it
+
+Cameron: "clicking the version number needs to start the update check. new version
+interactions should all be near the current version number in bottom left, not in a
+new corner". The badge, progress and portable-build link used to sit in the status
+bar's bottom-right corner, away from the version they relate to.
+
+- The version (`PlugSight vX.Y.Z`, bottom-left) is now a button that runs
+  `checkForUpdates()` immediately; its hover tip says when it last checked.
+- Everything update-related renders right beside it: spinner + "Checking…",
+  "Up to date" / "Couldn't check for updates" for 5 s after a *manual* check
+  (background checks stay silent unless they find something), the
+  "Update to x.y.z" badge (install in place) or "x.y.z available" (portable → release
+  page), and "Downloading x.y.z NN%" / "Installing…" in the same spot.
+- `checkForUpdates()` now returns a `CheckOutcome` (`available` / `current` /
+  `failed`) and records `lastCheck`. A failed check was previously indistinguishable
+  from "up to date" — the same trap as in Findings above, now visible to the user.
+  GitHub 404 (no releases) counts as `current`; other non-OK statuses and network
+  errors as `failed`.
+- `Tooltip` gained `align="left"` for controls at the window's left edge.
+- Verified in `cargo tauri dev`: manual click → "Checking…" → "Up to date" (dev at
+  0.7.0, latest 0.7.0); with the dev config temporarily at 0.6.0, the automatic check
+  showed "↓ Update to 0.7.0" beside "PlugSight v0.6.0" via the native updater
+  (canAutoUpdate). The badge was deliberately not clicked (it would run the real
+  installer); config restored after.
+
 ## Things not to do
 
 - Don't set `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — see Decisions above.

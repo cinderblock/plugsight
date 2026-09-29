@@ -127,7 +127,8 @@ Two per-device readouts, asked for by Cameron on 2026-09-28:
 ## Progress log
 
 - [x] 2026-09-28: probes (arrival dates, boot clock), design, plan.
-- [x] Implemented, verified live with GhostCOM, committed (not pushed, not released).
+- [x] Implemented, verified live with GhostCOM, committed.
+- [x] Released in **v0.7.0** (`fb7d49c`, 2026-09-28) with the tree-line redraw, single-speed hub rows and the ENUMERATED fix. `main` pushed and CI green before tagging; release run 36505350139 published all six assets; manifest checked (version 0.7.0, trusted comment `file:PlugSight_0.7.0_x64-setup.exe` / `version:0.7.0`, installer URL 200).
 
 ## Open questions for the user
 

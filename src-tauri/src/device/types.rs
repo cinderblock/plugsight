@@ -163,8 +163,17 @@ pub enum DeviceStatus {
 }
 
 /// An incremental change event emitted from the backend to the frontend.
+///
+/// `rename_all` only renames the variants (the `type` tag); the fields inside
+/// them need `rename_all_fields`. Without it `Removed` went out as
+/// `instance_id`, the frontend read `instanceId` as undefined, and no removal
+/// ever reached the list.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum DeviceEvent {
     /// A device was newly discovered or plugged in.
     Added { device: DeviceInfo },
@@ -186,4 +195,21 @@ pub struct ClassMeta {
     pub name: String,
     /// Icon identifier for the frontend to use.
     pub icon_id: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The frontend reads these field names (`src/lib/types.ts`, `DeviceEvent`).
+    #[test]
+    fn a_removal_names_the_device_as_the_frontend_reads_it() {
+        let event = DeviceEvent::Removed {
+            instance_id: "USB\\VID_1234&PID_5678\\SERIAL".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&event).unwrap(),
+            serde_json::json!({ "type": "removed", "instanceId": "USB\\VID_1234&PID_5678\\SERIAL" })
+        );
+    }
 }

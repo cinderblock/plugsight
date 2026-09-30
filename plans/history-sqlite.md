@@ -60,7 +60,10 @@ history to SQLite with a one-time import of the JSON file, and release as v0.7.2
 6. [x] Live check in a dev run: import happens, events recorded, second launch
    focuses the first.
 7. [x] README / CLAUDE.md updates.
-8. [ ] **Current:** commit, then release v0.7.2 through CI.
+8. [x] Committed (cb1ea7b single instance, e0beed7 SQLite) and released
+   v0.7.2 through CI (release commit 433674d). Published 2026-09-30T21:37Z with
+   Setup.exe, MSI, portable zip, both `.sig` files, and a `latest.json`
+   advertising 0.7.2. The installers grew ~0.75–0.95 MB (bundled SQLite).
 
 ## Findings / gotchas
 
@@ -90,7 +93,7 @@ history to SQLite with a one-time import of the JSON file, and release as v0.7.2
 - [x] Single instance
 - [x] SQLite history
 - [x] Verified (tests, timing, live dev run)
-- [ ] Released as v0.7.2
+- [x] Released as v0.7.2
 
 ## Open questions for the user
 

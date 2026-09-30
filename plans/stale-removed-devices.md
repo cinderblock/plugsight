@@ -113,7 +113,7 @@ out to have two causes, one of them present since the initial commit.
 7. [x] Fix removal serialization (`types.rs`).
 8. [x] Committed as three commits: 256805a (removal events), bff8f06 (reboot
    reconnects), and the watcher race + this plan.
-9. [ ] Release: the user's call (open question 2).
+9. [x] Released v0.7.1 (tag on release commit d2a365f, user-approved). Release workflow succeeded; published 2026-09-30T02:10Z with Setup.exe, MSI, portable zip, both `.sig` files and a `latest.json` that advertises 0.7.1 with the Setup.exe signature.
 
 ## How to inspect the running frontend (reusable)
 
@@ -150,15 +150,20 @@ instance from Vite, so `m.state`, `m.counts()` etc. are live. Hook events with
       pass.
 - [x] Verified live
 - [x] Committed
-- [ ] Released (user's call)
+- [x] Released as v0.7.1
 
 ## Open questions for the user
 
 1. Should the ghost-timeout dropdown gain an "Off" choice, so removed devices
    disappear at once instead of fading for at least 5 s? Recommendation: yes,
    it's cheap, but not needed for either bug.
-2. Cut a v0.7.1 release with both fixes? The running v0.7.0 copies keep writing
-   the polluted history until they are replaced.
+2. ~~Cut a v0.7.1 release?~~ Approved; tagged v0.7.1.
+
+## Release gotcha
+
+- `bun run version:bump patch --tag` tags the *current* commit **before** the bump
+  is committed, i.e. the wrong commit. Bump without `--tag`, run `cargo check` to
+  refresh `Cargo.lock`, commit "Release vX.Y.Z", then `git tag` that commit.
 
 ## Things not to do
 

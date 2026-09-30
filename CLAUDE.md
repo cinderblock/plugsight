@@ -12,7 +12,7 @@
 ## Key Design Decisions
 
 - **WinRT DeviceWatcher** provides incremental Added/Removed/Updated events — never a full list refresh. This is the core innovation over the official Windows Device Manager.
-- **Ghost entries**: Removed devices stay visible (faded) for 30 seconds so the user can see what disappeared.
+- **Ghost entries**: Removed devices stay visible (faded) for 30 seconds by default so the user can see what disappeared. The toolbar selector ranges from Off (`GHOST_TIMEOUT_OFF`, -1: no ghosts) to Never (`GHOST_TIMEOUT_INDEFINITE`, 0).
 - **Status badges** are 28px inline elements (not tiny 8px icon overlays like the official Windows Device Manager).
 - **SolidJS** was chosen over React for fine-grained reactivity: when one device changes, only that one DOM node updates.
 

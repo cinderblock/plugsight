@@ -82,6 +82,13 @@ const DEFAULT_GHOST_TIMEOUT_MS = 30_000;
 /** Special value for `ghostTimeoutMs` that means "keep ghosts indefinitely". */
 const GHOST_TIMEOUT_INDEFINITE = 0;
 
+/**
+ * Special value for `ghostTimeoutMs` that means "no ghosts": a removed device
+ * leaves the list at once. Negative so it can't collide with a real duration
+ * or with `GHOST_TIMEOUT_INDEFINITE`, which older installs have saved as 0.
+ */
+const GHOST_TIMEOUT_OFF = -1;
+
 /** Maximum number of ghost entries to keep. */
 const MAX_GHOSTS = 100;
 
@@ -298,19 +305,21 @@ function handleDeviceRemoved(instanceId: string) {
   const now = Date.now();
 
   batch(() => {
-    // Move to ghosts. Expiration is computed at sweep time against the
-    // current `ghostTimeoutMs()` setting, so changing the setting affects
-    // existing ghosts without re-stamping.
-    setState('ghosts', instanceId, {
-      // The ghost's history ends in this removal, so its detail pane shows the
-      // device as away rather than still connected.
-      device: {
-        ...device,
-        isPresent: false,
-        connectionEvents: [...device.connectionEvents, { t: now, kind: 'remove' }],
-      },
-      removedAt: now,
-    });
+    // Move to ghosts, unless ghosts are turned off. Expiration is computed at
+    // sweep time against the current `ghostTimeoutMs()` setting, so changing
+    // the setting affects existing ghosts without re-stamping.
+    if (ghostTimeoutMs() !== GHOST_TIMEOUT_OFF) {
+      setState('ghosts', instanceId, {
+        // The ghost's history ends in this removal, so its detail pane shows the
+        // device as away rather than still connected.
+        device: {
+          ...device,
+          isPresent: false,
+          connectionEvents: [...device.connectionEvents, { t: now, kind: 'remove' }],
+        },
+        removedAt: now,
+      });
+    }
 
     // Remove from live devices.
     setState(
@@ -448,7 +457,9 @@ function enforceGhostCap() {
  * Sweep expired ghost entries based on the current `ghostTimeoutMs()` setting.
  *
  * When the timeout is `GHOST_TIMEOUT_INDEFINITE` (0), ghosts are never swept
- * and remain until manually dismissed or the MAX_GHOSTS cap is hit.
+ * and remain until manually dismissed or the MAX_GHOSTS cap is hit. With
+ * `GHOST_TIMEOUT_OFF` (negative) every ghost counts as expired, so switching
+ * to Off clears the ones already showing.
  */
 function sweepGhosts() {
   const timeout = ghostTimeoutMs();
@@ -979,6 +990,7 @@ export {
   ghostTimeoutMs,
   setGhostTimeoutMs,
   GHOST_TIMEOUT_INDEFINITE,
+  GHOST_TIMEOUT_OFF,
   density,
   groupIdentical,
   usbNesting,

@@ -18,6 +18,7 @@ import {
   ghostTimeoutMs,
   setGhostTimeoutMs,
   GHOST_TIMEOUT_INDEFINITE,
+  GHOST_TIMEOUT_OFF,
   pulseAllDevices,
   density,
   cycleDensity,
@@ -64,8 +65,9 @@ const NOTIFY_MODE_LABELS: Record<NotifyMode, string> = {
   all: 'all device changes',
 };
 
-/** Presets for the ghost timeout selector (ms). 0 = keep indefinitely. */
+/** Presets for the ghost timeout selector (ms). Off = no ghosts; 0 = keep indefinitely. */
 const GHOST_TIMEOUT_PRESETS: ReadonlyArray<{ ms: number; label: string }> = [
+  { ms: GHOST_TIMEOUT_OFF, label: 'Off' },
   { ms: 5_000, label: '5s' },
   { ms: 10_000, label: '10s' },
   { ms: 30_000, label: '30s' },
@@ -293,6 +295,7 @@ const Toolbar: Component = () => {
 /** Format a timeout in ms as a short human string (e.g. "30s", "5m", "1h"). */
 function formatTimeout(ms: number): string {
   if (ms === GHOST_TIMEOUT_INDEFINITE) return 'never';
+  if (ms < 0) return 'off';
   if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
   if (ms < 60 * 60_000) return `${Math.round(ms / 60_000)}m`;
   return `${Math.round(ms / (60 * 60_000))}h`;

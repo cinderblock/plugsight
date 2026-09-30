@@ -14,7 +14,7 @@ The official Windows Device Manager has a fundamental UX problem: **every change
 When you plug in a USB device, you see it slide into the list with a green highlight flash. When you unplug it, it doesn't vanish — it fades into a **ghost entry** that stays visible for 30 seconds, clearly labeled "Removed 5s ago", so you can see exactly what left the system. Category headers show animated **+N / −N pills** as devices come and go.
 
 ### Ghost Entries for Removed Devices
-Recently removed devices appear faded with a dashed border, a strikethrough name, and a timestamp. You can still click them to view their last-known properties. A dismiss button lets you clear individual ghosts, or clear all from the toolbar.
+Recently removed devices appear faded with a dashed border, a strikethrough name, and a timestamp. You can still click them to view their last-known properties. A dismiss button lets you clear individual ghosts, or clear all from the toolbar. The selector at the right of the toolbar sets how long they stay: **Off** (removed devices leave the list at once), 5 s to 1 h, or **Never**.
 
 ### Clear Status Indicators
 Problem devices are marked with **large, inline status badges** — not tiny overlay icons:

@@ -154,7 +154,6 @@ pub fn start_watcher(app_handle: AppHandle) -> Result<(), String> {
     // snapshot we diff against carries the same reconnect counts the frontend
     // will be sent.
     history::decorate(&mut initial_devices);
-    history::save_if_dirty();
     let mut known_map = HashMap::new();
     for device in initial_devices {
         known_map.insert(device.instance_id.clone(), device);
@@ -347,13 +346,11 @@ unsafe extern "system" fn cm_notify_callback(
     {
         let now = history::now_ms();
         log::debug!("PnP notification {action:?} for {instance_id}");
-        history::with(|h| {
-            if removed {
-                h.record_removal(&instance_id, now);
-            } else {
-                h.record_arrival(&instance_id, now);
-            }
-        });
+        if removed {
+            history::record_removal(&instance_id, now);
+        } else {
+            history::record_arrival(&instance_id, now);
+        }
     }
 
     // Refresh on every arrival or removal. ENUMERATED matters on its own: a
@@ -465,7 +462,7 @@ fn do_reenumerate_and_diff(app: &AppHandle, shared: &SharedState) {
         if !new_map.contains_key(id) {
             // Normally already recorded by the PnP notification; this covers a
             // missed one. A duplicate is ignored.
-            history::with(|h| h.record_removal(id, now));
+            history::record_removal(id, now);
             log::debug!("Emitting Removed {id}");
             let event = DeviceEvent::Removed {
                 instance_id: id.clone(),
@@ -488,9 +485,6 @@ fn do_reenumerate_and_diff(app: &AppHandle, shared: &SharedState) {
 
     // Replace the known state with the new snapshot.
     state.known = new_map;
-    drop(state);
-
-    history::save_if_dirty();
 }
 
 /// Force an immediate synchronous re-enumeration + diff, bypassing the debounce.

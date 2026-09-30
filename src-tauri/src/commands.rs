@@ -30,7 +30,6 @@ pub fn stream_initial_devices(app: tauri::AppHandle) -> Result<(), String> {
 
     let mut devices = enumerator::enumerate_all_devices();
     history::decorate(&mut devices);
-    history::save_if_dirty();
     for device in devices {
         let _ = app.emit("device-event", &DeviceEvent::Added { device });
     }

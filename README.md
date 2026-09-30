@@ -55,7 +55,7 @@ Ethernet speed comes from the IP Helper interface table; the adapter's maximum i
 ### Connected Time & Reconnect History
 Every row ends with how long the device has been connected — **20s**, **50m**, **5h**, **2d**, or **boot** for devices that have been there since the machine started — with the exact time on hover. The time comes from Windows' own record of when the device arrived, so it's right even for devices that were plugged in before PlugSight started.
 
-A device that has dropped out and come back carries a **↻ N** reconnect count, amber if the latest drop was within a day. Hover it for a sparkline of when the drops happened; the detail panel lists each one with its time and how long the device was away, and hovering a tick on its sparkline names that drop. Drops are recorded as Windows reports them, device by device, so a flaky USB device that disconnects for a fraction of a second while you're away still leaves a mark. PlugSight also fills in the latest drop Windows remembers from while it wasn't running. Restarting the machine isn't counted as a drop. History is kept for 90 days.
+A device that has dropped out and come back carries a **↻ N** reconnect count, amber if the latest drop was within a day. Hover it for a sparkline of when the drops happened; the detail panel lists each one with its time and how long the device was away, and hovering a tick on its sparkline names that drop. Drops are recorded as Windows reports them, device by device, so a flaky USB device that disconnects for a fraction of a second while you're away still leaves a mark. PlugSight also fills in the latest drop Windows remembers from while it wasn't running. Restarting the machine isn't counted as a drop. History is kept for 90 days, in a SQLite database (`connection-history.sqlite3` in `%APPDATA%com.plugsight.app`) that you can open in any SQLite viewer. Versions before 0.7.2 kept it in `connection-history.json`, which is imported on first launch and then renamed to `connection-history.json.imported`.
 
 ### Serial Port Notifications
 Get a **"COM5 connected"** popup the moment a serial port is plugged in or removed — an in-app toast when the PlugSight window is focused, or a native Windows notification when it's in the background. A toolbar bell button cycles what triggers a popup: off, COM/serial ports only, or every device change. The COM/LPT port name (read from the device's registry `PortName`) also appears in the detail panel.
@@ -82,6 +82,7 @@ Installed builds (NSIS/MSI) use Tauri's native updater to download, verify, and 
 | App Shell | Tauri v2 | Lightweight (~5 MB), uses system WebView2, Rust backend for direct Win32 API access |
 | Backend | Rust | Direct bindings to SetupAPI + WinRT via `windows-rs` crate — no FFI layer needed |
 | Frontend | SolidJS | Fine-grained reactivity: one device change = one DOM update, not a full tree diff |
+| History | SQLite (`rusqlite`, bundled) | One small insert per connection event, safe to share between processes, readable in any SQLite viewer |
 | Styling | Tailwind CSS v4 | Utility-first CSS with dark mode support |
 | Animations | solid-transition-group | FLIP-based enter/exit/move animations for the device list |
 

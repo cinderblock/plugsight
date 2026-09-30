@@ -25,6 +25,7 @@ env_logger = "0.11"
 png = "0.17"
 base64 = "0.22"
 tauri-plugin-single-instance = "2"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
 
 [dependencies.windows]
 version = "0.58"

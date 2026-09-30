@@ -97,9 +97,13 @@ history to SQLite with a one-time import of the JSON file, and release as v0.7.2
 
 ## Open questions for the user
 
-(carried over from `plans/stale-removed-devices.md`)
-1. "Off" choice for the removed-device timeout?
-2. Fix `bun run version:bump --tag`, which tags before the bump is committed?
+(carried over from `plans/stale-removed-devices.md`; both approved and done)
+1. ~~"Off" choice for the removed-device timeout?~~ Commit 63ef668.
+2. ~~Fix `bun run version:bump --tag`?~~ Commit f745afa: `--tag` now commits
+   "Release vX.Y.Z" (the four version files, including `Cargo.lock`) and tags
+   that commit, refusing if those files are dirty or the tag exists.
+3. Release the Off choice as v0.7.3? Not yet asked for; the commits are on
+   `main` locally, not pushed.
 
 ## Things not to do
 

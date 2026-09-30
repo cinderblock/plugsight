@@ -154,14 +154,13 @@ instance from Vite, so `m.state`, `m.counts()` etc. are live. Hook events with
 
 ## Open questions for the user
 
-1. Should the ghost-timeout dropdown gain an "Off" choice, so removed devices
-   disappear at once instead of fading for at least 5 s? Recommendation: yes,
-   it's cheap, but not needed for either bug.
+1. ~~"Off" choice for the ghost-timeout dropdown?~~ Approved and done in
+   commit 63ef668 (`GHOST_TIMEOUT_OFF = -1`).
 2. ~~Cut a v0.7.1 release?~~ Approved; tagged v0.7.1.
 
 ## Release gotcha
 
-- `bun run version:bump patch --tag` tags the *current* commit **before** the bump
+- (Fixed in f745afa; kept for history.) `bun run version:bump patch --tag` tagged the *current* commit **before** the bump
   is committed, i.e. the wrong commit. Bump without `--tag`, run `cargo check` to
   refresh `Cargo.lock`, commit "Release vX.Y.Z", then `git tag` that commit.
 

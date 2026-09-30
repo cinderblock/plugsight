@@ -69,6 +69,9 @@ Get a **"COM5 connected"** popup the moment a serial port is plugged in or remov
 ### Persistent UI State
 Search query, filter state, category expansion, and hidden devices/categories are all saved to `localStorage` and restored on next launch.
 
+### One Window
+PlugSight runs once per user. Launching it again while it's running brings the open window to the front instead of starting a second copy that would watch the same devices and raise the same notifications twice.
+
 ### In-App Auto-Updates
 Installed builds (NSIS/MSI) use Tauri's native updater to download, verify, and install updates seamlessly. Portable builds fall back to polling GitHub Releases. Checks run on launch and every 30 minutes, and clicking the version number in the bottom-left corner checks right away. Everything about updates appears right beside that version number: "Checking…" while it looks, "Up to date" or "Couldn't check for updates" after a check you asked for, and an **Update to x.y.z** badge when there's a newer release — which installs in place with its download progress shown in the same spot, or, for portable builds, opens the release page.
 

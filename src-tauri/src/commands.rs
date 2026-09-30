@@ -15,7 +15,7 @@ use crate::device::types::{ClassMeta, DeviceInfo};
 #[tauri::command]
 pub fn get_all_devices() -> Result<Vec<DeviceInfo>, String> {
     let mut devices = enumerator::enumerate_all_devices();
-    history::with(|h| h.decorate(&mut devices, history::now_ms()));
+    history::decorate(&mut devices);
     Ok(devices)
 }
 
@@ -29,7 +29,7 @@ pub fn stream_initial_devices(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Emitter;
 
     let mut devices = enumerator::enumerate_all_devices();
-    history::with(|h| h.decorate(&mut devices, history::now_ms()));
+    history::decorate(&mut devices);
     history::save_if_dirty();
     for device in devices {
         let _ = app.emit("device-event", &DeviceEvent::Added { device });
@@ -43,19 +43,17 @@ pub fn stream_initial_devices(app: tauri::AppHandle) -> Result<(), String> {
 pub fn get_device_detail(instance_id: String) -> Result<Option<DeviceInfo>, String> {
     let mut device = enumerator::get_device_by_instance_id(&instance_id);
     if let Some(device) = device.as_mut() {
-        history::with(|h| h.decorate(std::slice::from_mut(device), history::now_ms()));
+        history::decorate(std::slice::from_mut(device));
     }
     Ok(device)
 }
 
 /// When the machine booted, in milliseconds since the Unix epoch: now minus the
 /// system uptime. The frontend shows devices that arrived with the boot as
-/// "boot" rather than an age. (Fast Startup doesn't disturb this: the uptime
-/// clock and Windows' recorded boot time agree.)
+/// "boot" rather than an age.
 #[tauri::command]
 pub fn system_boot_time() -> i64 {
-    let uptime = unsafe { windows::Win32::System::SystemInformation::GetTickCount64() } as i64;
-    history::now_ms() - uptime
+    history::boot_ms()
 }
 
 /// Return metadata for all known device setup classes.

@@ -96,7 +96,7 @@ pub fn start_watcher(app_handle: AppHandle) -> Result<(), String> {
     // Square the connection history with Windows' arrival dates first, so the
     // snapshot we diff against carries the same reconnect counts the frontend
     // will be sent.
-    history::with(|h| h.decorate(&mut initial_devices, history::now_ms()));
+    history::decorate(&mut initial_devices);
     history::save_if_dirty();
     let mut known_map = HashMap::new();
     for device in initial_devices {
@@ -430,8 +430,8 @@ fn trigger_reenumerate(app: AppHandle, shared: SharedState) {
 /// and emit Added/Removed/Updated events for anything that changed.
 fn do_reenumerate_and_diff(app: &AppHandle, shared: &SharedState) {
     let mut new_devices = enumerator::enumerate_all_devices();
+    history::decorate(&mut new_devices);
     let now = history::now_ms();
-    history::with(|h| h.decorate(&mut new_devices, now));
 
     let mut new_map: HashMap<InstanceId, DeviceInfo> = HashMap::new();
     for device in new_devices {

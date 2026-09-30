@@ -37,7 +37,7 @@ bun run test
 
 # Bump version across all config files (package.json, Cargo.toml, tauri.conf.json)
 bun run version:bump patch          # or: minor, major, prerelease rc, 1.0.0
-bun run version:bump patch --tag    # also creates a git tag
+bun run version:bump patch --tag    # also commits "Release vX.Y.Z" and tags that commit (then push both)
 bun run version:bump minor --dry-run  # preview without writing
 ```
 

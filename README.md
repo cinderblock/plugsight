@@ -121,14 +121,15 @@ This produces an **NSIS installer**, **MSI installer**, and a **portable EXE** i
 ### Releasing a New Version
 
 ```bash
-# Bump version in all config files (package.json, Cargo.toml, tauri.conf.json)
-bun run version:bump minor          # or: patch, major, prerelease rc, or explicit like 1.0.0
+# Bump the version in package.json, Cargo.toml, tauri.conf.json and Cargo.lock,
+# commit exactly those as "Release v0.2.0", and tag that commit v0.2.0
+bun run version:bump minor --tag    # or: patch, major, prerelease rc, or explicit like 1.0.0
 
-# Commit, tag, and push
-git add -A && git commit -m "Bump version to v0.2.0"
-git tag v0.2.0
+# Push the commit, then the tag (the tag push starts the release)
 git push && git push origin v0.2.0
 ```
+
+With `--tag` the script refuses to start if any of those files has uncommitted changes (they'd end up in the release commit) or the tag already exists. `--dry-run` shows what it would do.
 
 The **Release** workflow (`release.yml`) is triggered by the tag push and:
 1. Builds NSIS installer (supports per-user install, no admin required), MSI installer (for enterprise/GPO), and a portable EXE

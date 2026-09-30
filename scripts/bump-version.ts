@@ -15,13 +15,15 @@
  *   bun run version:bump prerelease rc  # 0.1.0 → 0.1.1-rc.0, or 0.1.1-rc.0 → 0.1.1-rc.1
  *
  * Options:
- *   --tag     Also create a git tag (v0.2.0) after updating files
+ *   --tag     Also commit the bump as "Release v0.2.0" and tag that commit
+ *             (v0.2.0). Pushing is left to you: the tag push starts the
+ *             release workflow.
  *   --dry-run Show what would change without writing files
  */
 
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 // ── Paths ────────────────────────────────────────────────────────────────
 
@@ -29,6 +31,14 @@ const ROOT = resolve(import.meta.dirname, '..');
 const PACKAGE_JSON = resolve(ROOT, 'package.json');
 const CARGO_TOML = resolve(ROOT, 'src-tauri', 'Cargo.toml');
 const TAURI_CONF = resolve(ROOT, 'src-tauri', 'tauri.conf.json');
+const CARGO_LOCK = resolve(ROOT, 'src-tauri', 'Cargo.lock');
+
+/** Everything a release commit changes. */
+const RELEASE_FILES = [PACKAGE_JSON, CARGO_TOML, TAURI_CONF, CARGO_LOCK];
+
+function git(...gitArgs: string[]): string {
+  return execFileSync('git', gitArgs, { cwd: ROOT, encoding: 'utf-8' }).trim();
+}
 
 // ── Parse CLI args ───────────────────────────────────────────────────────
 
@@ -96,7 +106,9 @@ function bumpVersion(current: string, bumpType: string, preId?: string): string 
       if (/^\d+\.\d+\.\d+/.test(bumpType)) {
         return bumpType;
       }
-      throw new Error(`Unknown bump type: "${bumpType}". Use: major, minor, patch, prerelease, or an explicit version.`);
+      throw new Error(
+        `Unknown bump type: "${bumpType}". Use: major, minor, patch, prerelease, or an explicit version.`,
+      );
   }
 }
 
@@ -108,15 +120,30 @@ if (currentVersion === newVersion) {
   process.exit(0);
 }
 
+const tag = `v${newVersion}`;
+
+// With --tag, check before touching anything that the release commit can hold
+// exactly the bump: other edits in these files would be swept into it, and an
+// existing tag would leave the new commit untagged.
+if (createTag) {
+  const dirty = RELEASE_FILES.filter(file => git('status', '--porcelain', '--', file) !== '');
+  if (dirty.length > 0) {
+    const names = dirty.map(file => file.slice(ROOT.length + 1)).join(', ');
+    console.error(`Uncommitted changes in ${names}. Commit them first, so the release commit holds only the bump.`);
+    process.exit(1);
+  }
+  if (git('tag', '--list', tag) !== '') {
+    console.error(`Tag ${tag} already exists.`);
+    process.exit(1);
+  }
+}
+
 // ── Update files ─────────────────────────────────────────────────────────
 
 function updatePackageJson(version: string) {
   const content = readFileSync(PACKAGE_JSON, 'utf-8');
   // Replace the "version" field while preserving formatting
-  const updated = content.replace(
-    /("version"\s*:\s*)"[^"]*"/,
-    `$1"${version}"`,
-  );
+  const updated = content.replace(/("version"\s*:\s*)"[^"]*"/, `$1"${version}"`);
   if (updated === content) {
     throw new Error('Failed to update version in package.json');
   }
@@ -126,10 +153,7 @@ function updatePackageJson(version: string) {
 function updateCargoToml(version: string) {
   const content = readFileSync(CARGO_TOML, 'utf-8');
   // Replace the version under [package] — it's the first `version = "..."` line
-  const updated = content.replace(
-    /^(version\s*=\s*)"[^"]*"/m,
-    `$1"${version}"`,
-  );
+  const updated = content.replace(/^(version\s*=\s*)"[^"]*"/m, `$1"${version}"`);
   if (updated === content) {
     throw new Error('Failed to update version in Cargo.toml');
   }
@@ -139,10 +163,7 @@ function updateCargoToml(version: string) {
 function updateTauriConf(version: string) {
   const content = readFileSync(TAURI_CONF, 'utf-8');
   // Replace the top-level "version" field
-  const updated = content.replace(
-    /("version"\s*:\s*)"[^"]*"/,
-    `$1"${version}"`,
-  );
+  const updated = content.replace(/("version"\s*:\s*)"[^"]*"/, `$1"${version}"`);
   if (updated === content) {
     throw new Error('Failed to update version in tauri.conf.json');
   }
@@ -164,24 +185,40 @@ for (const { path, label, content } of updates) {
   }
 }
 
-// ── Optionally create git tag ────────────────────────────────────────────
+// ── Cargo.lock ───────────────────────────────────────────────────────────
+
+// The lockfile records the app's own version too. Refresh just that entry
+// (--workspace leaves dependencies alone; --offline needs no network), so the
+// next build doesn't change it after the release commit.
+if (dryRun) {
+  console.log('  [dry-run] Would update src-tauri/Cargo.lock');
+} else {
+  execFileSync('cargo', ['update', '--workspace', '--offline'], {
+    cwd: resolve(ROOT, 'src-tauri'),
+    stdio: 'inherit',
+  });
+  console.log('  Updated src-tauri/Cargo.lock');
+}
+
+// ── Optionally commit and tag ────────────────────────────────────────────
 
 if (createTag) {
-  const tag = `v${newVersion}`;
   if (dryRun) {
-    console.log(`  [dry-run] Would create git tag: ${tag}`);
+    console.log(`  [dry-run] Would commit "Release ${tag}" and tag it ${tag}`);
   } else {
-    try {
-      execSync(`git tag "${tag}"`, { cwd: ROOT, stdio: 'inherit' });
-      console.log(`  Created git tag: ${tag}`);
-      console.log(`\nNext steps:`);
-      console.log(`  git push && git push origin ${tag}`);
-    } catch {
-      console.error(`  Failed to create git tag "${tag}" — it may already exist.`);
-      process.exit(1);
-    }
+    // Commit only the release files, whatever else is staged, then tag the new
+    // commit. Tagging first would put the tag on the previous commit, which
+    // still carries the old version.
+    execFileSync('git', ['commit', '-m', `Release ${tag}`, '--', ...RELEASE_FILES], {
+      cwd: ROOT,
+      stdio: 'inherit',
+    });
+    git('tag', tag);
+    console.log(`  Committed "Release ${tag}" and tagged it ${tag}`);
+    console.log(`\nNext step (pushing the tag starts the release workflow):`);
+    console.log(`  git push && git push origin ${tag}`);
   }
 } else {
-  console.log(`\nTo tag this release:`);
-  console.log(`  git tag v${newVersion} && git push origin v${newVersion}`);
+  console.log(`\nTo release: commit these files as "Release ${tag}", tag that commit ${tag}, and push both.`);
+  console.log('Or rerun with --tag, which commits and tags for you.');
 }

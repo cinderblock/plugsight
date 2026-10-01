@@ -102,8 +102,11 @@ history to SQLite with a one-time import of the JSON file, and release as v0.7.2
 2. ~~Fix `bun run version:bump --tag`?~~ Commit f745afa: `--tag` now commits
    "Release vX.Y.Z" (the four version files, including `Cargo.lock`) and tags
    that commit, refusing if those files are dirty or the tag exists.
-3. Release the Off choice as v0.7.3? Not yet asked for; the commits are on
-   `main` locally, not pushed.
+3. ~~Release the Off choice as v0.7.3?~~ Approved and released 2026-10-01
+   (release commit 5deed92, published 23:19Z, `latest.json` advertises 0.7.3).
+   First release cut with the fixed `version:bump --tag`. The script's commit
+   has no Co-Authored-By trailer, so the commit was amended to add it and the
+   still-local tag moved with `git tag -f` before pushing.
 
 ## Things not to do
 

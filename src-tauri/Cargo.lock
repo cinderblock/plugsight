@@ -2942,7 +2942,7 @@ dependencies = [
 
 [[package]]
 name = "plugsight"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "base64 0.22.1",
  "env_logger",
